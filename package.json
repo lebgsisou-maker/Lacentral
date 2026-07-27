@@ -1,0 +1,13 @@
+{
+  "name": "lacentrale-securite-bot",
+  "version": "1.0.0",
+  "description": "Bot Anti-Dox, Anti-Spam et Anti-Raid pour La Centrale",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.14.1"
+  }
+}
+
