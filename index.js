@@ -1,3 +1,17 @@
+// --- SERVEUR WEB POUR OUVRIR LE PORT RENDER ---
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('La Centrale Sécurité est opérationnelle ! 🛡️');
+});
+
+app.listen(PORT, () => {
+  console.log(`Serveur web à l'écoute sur le port ${PORT}`);
+});
+// ----------------------------------------------
+
 const { Client, GatewayIntentBits } = require('discord.js');
 
 const client = new Client({
