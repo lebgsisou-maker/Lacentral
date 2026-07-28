@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
-// 💡 Rendre les fichiers de la racine accessibles (pour que l'image du logo charge à 100%)
+// 💡 Rendre tous les fichiers de la racine accessibles (logo, images, etc.)
 app.use(express.static(__dirname));
 
 // Configuration de la session
@@ -19,7 +19,7 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// 🖼️ Nom exact du logo hébergé sur ton GitHub
+// 🖼️ Nom exact du logo téléversé sur GitHub
 const LOGO_URL = '/1785187451514.png'; 
 
 // Header & Footer HTML réutilisables
@@ -255,7 +255,7 @@ app.get('/doc', (req, res) => {
           </div>
           <div class="card">
             <h3>⚠️ Système de Moderation</h3>
-            <p>Avertissez vos membres (`!warn`). Une fois le nombre maximum d'avertissements atteint, la sanction définie s'applique automatiquement.</p>
+            <p>Avertissez vos membres (\`!warn\`). Une fois le nombre maximum d'avertissements atteint, la sanction définie s'applique automatiquement.</p>
           </div>
           <a href="/" style="color:#38bdf8; font-weight:bold; text-decoration:none;">← Retour à l'accueil</a>
         </div>
@@ -273,7 +273,7 @@ app.get('/tos', (req, res) => {
       <body style="background:#0f172a; color:white; font-family:sans-serif; margin:0; min-height:100vh; display:flex; flex-direction:column; justify-content:space-between;">
         ${HEADER_HTML}
         <div style="max-width:700px; width:90%; margin:auto;">
-          <h2>Conditions d'utilisation (ToS)</h2>
+          2. Conditions d'utilisation (ToS)
           <p style="color:#cbd5e1; line-height:1.6;">En utilisant le bot LA CENTRALE FR SÉCURITÉ, vous acceptez d'utiliser l'application conformément aux règles d'utilisation de Discord.</p>
           <p style="color:#cbd5e1; line-height:1.6;">Toute tentative d'utilisation malveillante du bot entraînera un bannissement définitif du service.</p>
           <br>
@@ -293,7 +293,7 @@ app.get('/privacy', (req, res) => {
       <body style="background:#0f172a; color:white; font-family:sans-serif; margin:0; min-height:100vh; display:flex; flex-direction:column; justify-content:space-between;">
         ${HEADER_HTML}
         <div style="max-width:700px; width:90%; margin:auto;">
-          <h2>Politique de Confidentialité</h2>
+          2. Politique de Confidentialité
           <p style="color:#cbd5e1; line-height:1.6;">LA CENTRALE FR SÉCURITÉ ne collecte que les identifiants nécessaires au fonctionnement de la modération et de la sauvegarde de votre configuration (IDs de serveur, IDs de rôles).</p>
           <p style="color:#cbd5e1; line-height:1.6;">Aucune donnée personnelle n'est vendue ni cédée à des tiers.</p>
           <br>
@@ -322,3 +322,4 @@ app.post('/save-config/:guildId', (req, res) => {
 // 8. Déconnexion & Lancement
 app.get('/logout', (req, res) => { req.session.destroy(); res.redirect('/'); });
 app.listen(PORT, () => console.log(`Serveur prêt sur le port ${PORT}`));
+
