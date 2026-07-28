@@ -8,7 +8,7 @@ const {
   Client, GatewayIntentBits, PermissionFlagsBits, ChannelType, EmbedBuilder, 
   ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
   AttachmentBuilder, REST, Routes, SlashCommandBuilder,
-  ModalBuilder, TextInputBuilder, TextInputStyle
+  ModalBuilder, TextInputBuilder, TextInputStyle, AutoModerationRuleTriggerType, AutoModerationActionType
 } = require('discord.js');
 
 const client = new Client({ 
@@ -16,15 +16,15 @@ const client = new Client({
     GatewayIntentBits.Guilds, 
     GatewayIntentBits.GuildMessages, 
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.AutoModerationConfiguration
   ] 
 });
 
-// Stockage mémoire
 const supportRoles = new Map(); 
 const userWarns = new Map();
 
-// Déclaration des commandes Slash
+// Commandes Slash
 const commands = [
   new SlashCommandBuilder()
     .setName('setup-ticket')
@@ -35,6 +35,11 @@ const commands = [
     .setName('setup-support-role')
     .setDescription('Définit le rôle staff qui gère les tickets')
     .addRoleOption(option => option.setName('role').setDescription('Le rôle staff').setRequired(true))
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+
+  new SlashCommandBuilder()
+    .setName('setup-automod')
+    .setDescription('Activer la règle AutoMod sur ce serveur (pour le badge 🛡️)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
@@ -71,23 +76,25 @@ client.on('ready', async () => {
   }
 });
 
-// SYSTEME ANTI-SPAM & ANTI-DOX
+// ==========================================
+// ANTI-SPAM ET ANTI-DOX ASSOUPLI (FIN DES FAUX POSITIFS)
+// ==========================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
+  // Anti-mass ping : uniquement si 5 pings ou plus dans le même message
   const mentionCount = message.mentions.users.size + message.mentions.roles.size;
-  if (mentionCount >= 3) {
+  if (mentionCount >= 5) {
     await message.delete().catch(() => {});
     return message.channel.send(`⚠️ ${message.author}, les pings massifs ne sont pas autorisés !`);
   }
 
-  const cleanContent = message.content.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const phoneRegex = /(?:(?:\+|00)33|0)[1-9](?:[\s.-]*\d{2}){4}/g;
-  const ipRegex = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
+  // Détection stricte d'IP uniquement (pas d'e-mail, ni de texte classique)
+  const ipRegex = /\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g;
 
-  if (phoneRegex.test(cleanContent) || ipRegex.test(cleanContent)) {
+  if (ipRegex.test(message.content)) {
     await message.delete().catch(() => {});
-    return message.channel.send(`🛡️ **La Centrale** : Message supprimé (détection de données sensibles).`);
+    return message.channel.send(`🛡️ **La Centrale** : Message supprimé (détection d'adresse IP).`);
   }
 });
 
@@ -97,14 +104,35 @@ client.on('interactionCreate', async (interaction) => {
   // --- COMMANDES SLASH ---
   if (interaction.isChatInputCommand()) {
     
-    // Config rôle staff
     if (interaction.commandName === 'setup-support-role') {
       const role = interaction.options.getRole('role');
       supportRoles.set(interaction.guild.id, role.id);
       return interaction.reply({ content: `✅ Rôle support défini sur : **${role.name}**`, ephemeral: true });
     }
 
-    // Panneau de tickets
+    if (interaction.commandName === 'setup-automod') {
+      try {
+        await interaction.guild.autoModerationRules.create({
+          name: 'La Centrale - Protection Anti-Spam',
+          creatorId: client.user.id,
+          enabled: true,
+          eventType: 1,
+          triggerType: AutoModerationRuleTriggerType.Keyword,
+          triggerMetadata: {
+            keywordFilter: ['*discord.gg/*', '*http://*', '*https://*']
+          },
+          actions: [
+            {
+              type: AutoModerationActionType.BlockMessage
+            }
+          ]
+        });
+        return interaction.reply({ content: '🛡️ **Règle AutoMod officielle créée !**', ephemeral: true });
+      } catch (err) {
+        return interaction.reply({ content: `❌ Impossible de créer la règle AutoMod : ${err.message}`, ephemeral: true });
+      }
+    }
+
     if (interaction.commandName === 'setup-ticket') {
       const embed = new EmbedBuilder()
         .setTitle("🎫 Central Assistance — Support & Sécurité")
@@ -112,10 +140,10 @@ client.on('interactionCreate', async (interaction) => {
           "Bienvenue sur le centre d'assistance officiel de **La Centrale**.\n\n" +
           "📜 **Règlement & Consignes du Support :**\n" +
           "• Merci de **rester courtois et poli** envers l'équipe du Staff.\n" +
-          "• Expliquez votre problème avec le plus de précisions possible (captures d'écran, détails).\n" +
-          "• Tout abus, spam de tickets ou langage inapproprié sera sanctionné d'un bannissement du support.\n" +
+          "• Expliquez votre problème avec le plus de précisions possible.\n" +
+          "• Tout abus ou spam de tickets sera sanctionné.\n" +
           "• Un membre du Staff prendra en charge votre demande dans les plus brefs délais.\n\n" +
-          "👉 *Sélectionnez la catégorie adaptée à votre besoin dans le menu ci-dessous pour ouvrir un salon privé.*"
+          "👉 *Sélectionnez la catégorie adaptée à votre besoin dans le menu ci-dessous.*"
         )
         .setColor("#5865F2")
         .setFooter({ text: "La Centrale Sécurité — Protection & Assistance", iconURL: client.user.displayAvatarURL() });
@@ -133,7 +161,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.channel.send({ embeds: [embed], components: [menu] });
     }
 
-    // Commande /warn
     if (interaction.commandName === 'warn') {
       const user = interaction.options.getUser('membre');
       const reason = interaction.options.getString('motif');
@@ -144,7 +171,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `⚠️ **${user.tag}** a été averti (Total Warns: ${count}). Motif : *${reason}*` });
     }
 
-    // Commande /timeout
     if (interaction.commandName === 'timeout') {
       const member = interaction.options.getMember('membre');
       const duration = interaction.options.getInteger('duree');
@@ -156,7 +182,6 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `🤐 **${member.user.tag}** a été mute pendant **${duration} minutes**. Motif : *${reason}*` });
     }
 
-    // Commande /ban
     if (interaction.commandName === 'ban') {
       const member = interaction.options.getMember('membre');
       const reason = interaction.options.getString('motif');
@@ -168,9 +193,24 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // --- CRÉATION DE TICKET (MENU DÉROULANT) ---
+  // --- CRÉATION DE TICKET ---
   if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
     const roleId = supportRoles.get(interaction.guild.id);
+    const selectedValue = interaction.values[0];
+
+    await interaction.message.edit({
+      components: [
+        new ActionRowBuilder().addComponents(
+          new StringSelectMenuBuilder().setCustomId('ticket_select').setPlaceholder('👉 Choisis ta catégorie...').addOptions([
+            { label: 'Contacter le Staff', value: 'staff', emoji: '🔰' },
+            { label: 'Partenariat & Collab', value: 'partenariat', emoji: '🤝' },
+            { label: 'Signalement', value: 'signalement', emoji: '❗' },
+            { label: 'Question', value: 'question', emoji: '❓' },
+            { label: 'Urgent / Prioritaire', value: 'urgent', emoji: '🚨' }
+          ])
+        )
+      ]
+    }).catch(() => {});
 
     const overwrites = [
       { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
@@ -189,11 +229,11 @@ client.on('interactionCreate', async (interaction) => {
     });
 
     const embed = new EmbedBuilder()
-      .setTitle(`🎫 Ticket — Category : ${interaction.values[0].toUpperCase()}`)
+      .setTitle(`🎫 Ticket — Catégorie : ${selectedValue.toUpperCase()}`)
       .setDescription(
         `Bonjour <@${interaction.user.id}>,\n\n` +
         "Un membre de notre équipe va prendre en charge votre demande d'ici quelques instants.\n" +
-        "Merci d'expliquer clairement votre demande ci-dessous en observant les consignes de courtoisie.\n\n" +
+        "Merci d'expliquer clairement votre demande ci-dessous.\n\n" +
         "*Seul le Staff autorisé peut procéder à la fermeture de ce ticket.*"
       )
       .setColor("#28a745");
@@ -207,21 +247,19 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ content: `✅ Votre ticket a été créé : ${channel}`, ephemeral: true });
   }
 
-  // --- CLIC SUR BOUTON DE FERMETURE (OUVERTURE DU FORMULAIRE DE MOTIF) ---
+  // --- BOUTON FERMETURE ---
   if (interaction.isButton()) {
     const roleId = supportRoles.get(interaction.guild.id);
     const hasModPerms = interaction.member.permissions.has(PermissionFlagsBits.ManageMessages) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
     const hasStaffRole = roleId && interaction.member.roles.cache.has(roleId);
 
-    // VÉRIFICATION STRICTE DE PERMISSION
     if (!hasModPerms && !hasStaffRole) {
       return interaction.reply({ 
-        content: "⛔ **Accès Refusé** : Seul un membre du Staff / Modération possède la permission de fermer ce ticket.", 
+        content: "⛔ **Accès Refusé** : Seul un membre du Staff possède la permission de fermer ce ticket.", 
         ephemeral: true 
       });
     }
 
-    // Affichage de la boîte de dialogue (Modal) pour demander le motif
     const isTranscript = interaction.customId === 'btn_close_transcript';
     const modal = new ModalBuilder()
       .setCustomId(isTranscript ? 'modal_close_transcript' : 'modal_close_simple')
@@ -229,26 +267,24 @@ client.on('interactionCreate', async (interaction) => {
 
     const reasonInput = new TextInputBuilder()
       .setCustomId('close_reason')
-      .setLabel('Motif de la fermeture du ticket')
+      .setLabel('Motif de la fermeture')
       .setStyle(TextInputStyle.Paragraph)
-      .setPlaceholder('Ex : Problème résolu / Absence de réponse / Demande traitée...')
+      .setPlaceholder('Ex : Problème résolu...')
       .setRequired(true);
 
     modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
     return interaction.showModal(modal);
   }
 
-  // --- TRAITEMENT DU FORMULAIRE (MODAL) DE FERMETURE ---
+  // --- FORMULAIRE MOTIF ---
   if (interaction.isModalSubmit()) {
     const reason = interaction.fields.getTextInputValue('close_reason');
 
-    // Case 1 : Fermeture simple avec motif
     if (interaction.customId === 'modal_close_simple') {
       await interaction.reply({ content: `🔒 **Fermeture du ticket** par ${interaction.user}.\n📝 **Motif :** *${reason}*\nSuppression dans 3 secondes...` });
       setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     }
 
-    // Case 2 : Fermeture + Transcript MP + Motif
     if (interaction.customId === 'modal_close_transcript') {
       await interaction.reply({ content: "📑 **Génération du transcript en cours...**" });
 
@@ -291,4 +327,4 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
-      
+                        
