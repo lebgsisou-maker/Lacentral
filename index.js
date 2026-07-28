@@ -4,11 +4,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware pour lire les formulaires POST & JSON
+// Middlewares
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// Fichiers statiques à la racine (logo, etc.)
 app.use(express.static(__dirname));
 
 // Configuration de la session
@@ -19,10 +17,10 @@ app.use(session({
   cookie: { secure: false }
 }));
 
-// 🖼️ Logo officiel
+// Logo du bot
 const LOGO_URL = '/1785187451514.png'; 
 
-// Header réutilisable avec Menu Hamburger (Couleurs : Orange & Blanc)
+// Header réutilisable (Orange & Blanc avec Menu Hamburger)
 const HEADER_HTML = `
   <style>
     .menu-container { position: relative; }
@@ -66,8 +64,6 @@ const FOOTER_HTML = `
   </footer>
 `;
 
-// ------------------- ROUTES -------------------
-
 // 1. PAGE D'ACCUEIL
 app.get('/', (req, res) => {
   if (req.session && req.session.token) {
@@ -82,8 +78,8 @@ app.get('/', (req, res) => {
         <style>
           body { background-color: #0c0a09; color: #ffffff; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
           .card { background-color: #1c1917; padding: 40px 30px; border-radius: 16px; text-align: center; max-width: 420px; width: 90%; margin: auto; border: 2px solid #f97316; box-shadow: 0 4px 20px rgba(249, 115, 22, 0.15); }
-          .btn-discord { background-color: #f97316; color: #ffffff; padding: 14px 22px; border-radius: 8px; text-decoration: none; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 25px; transition: 0.2s; font-size: 16px; }
-          .btn-discord:hover { background-color: #ea580c; transform: translateY(-2px); }
+          .btn-discord { background-color: #f97316; color: #ffffff; padding: 14px 22px; border-radius: 8px; text-decoration: none; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 25px; font-size: 16px; }
+          .btn-discord:hover { background-color: #ea580c; }
         </style>
       </head>
       <body>
@@ -144,7 +140,7 @@ app.get('/callback', async (req, res) => {
           ${g.icon ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" width="45" style="border-radius:50%; border:1px solid #f97316;">` : '<span style="font-size:24px;">🛡️</span>'}
           <span style="font-weight:bold; color:#ffffff; font-size:16px;">${g.name}</span>
         </div>
-        <a href="/dashboard/${g.id}" style="background:#f97316; color:#ffffff; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold; transition:0.2s;">⚙️ Gérer</a>
+        <a href="/dashboard/${g.id}" style="background:#f97316; color:#ffffff; padding:10px 18px; border-radius:6px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>
       </div>
     `).join('');
 
@@ -161,12 +157,12 @@ app.get('/callback', async (req, res) => {
           ${HEADER_HTML}
           <div style="max-width:680px; width:90%; margin:auto;">
             <div style="text-align:center;">
-              <h2 style="color:#ffffff;">Bienvenue, <span style="color:#f97316;">${user.username}</span> ! 👋</h2>
+              <h2 style="color:#ffffff;">Bienvenue, <span style="color:#f97316;">${user.username || 'Utilisateur'}</span> ! 👋</h2>
               <p style="color:#d6d3d1;">Sélectionnez le serveur Discord que vous souhaitez configurer :</p>
               <a href="/logout" style="color:#ef4444; text-decoration:none; font-size:13px; font-weight:bold;">Se déconnecter</a>
             </div>
             <hr style="border-color:#292524; margin:25px 0;">
-            ${guildsHTML || '<p style="text-align:center; color:#a8a29e;">Aucun serveur trouvé où vous avez les permissions d administrateur.</p>'}
+            ${guildsHTML || '<p style="text-align:center; color:#a8a29e;">Aucun serveur trouvé où vous êtes administrateur.</p>'}
           </div>
           ${FOOTER_HTML}
         </body>
@@ -179,7 +175,7 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// 3. DASHBOARD DU SERVEUR (SUPPORT, TICKETS & WARNS)
+// 3. DASHBOARD DU SERVEUR
 app.get('/dashboard/:guildId', async (req, res) => {
   const guildId = req.params.guildId;
 
@@ -205,7 +201,7 @@ app.get('/dashboard/:guildId', async (req, res) => {
             label { font-weight:bold; display:block; margin-top:12px; color:#f5f5f4; font-size:14px; }
             input, select { width:100%; padding:12px; border-radius:6px; border:1px solid #44403c; margin-top:6px; background:#0c0a09; color:white; box-sizing:border-box; font-size:14px; }
             input:focus, select:focus { border-color:#f97316; outline:none; }
-            .btn-save { background:#f97316; color:white; border:none; padding:14px 20px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; font-size:16px; margin-top:10px; transition:0.2s; }
+            .btn-save { background:#f97316; color:white; border:none; padding:14px 20px; border-radius:8px; font-weight:bold; cursor:pointer; width:100%; font-size:16px; margin-top:10px; }
             .btn-save:hover { background:#ea580c; }
           </style>
         </head>
@@ -218,14 +214,12 @@ app.get('/dashboard/:guildId', async (req, res) => {
             </div>
 
             <form action="/save-config/${guild.id}" method="POST">
-              <!-- SECTION SUPPORT -->
               <div class="card">
                 <h3>🛡️ Équipe & Rôles Support</h3>
                 <label>ID du rôle Admin / Modérateur Support :</label>
                 <input type="text" name="support_role_id" placeholder="Ex: 112233445566778899">
               </div>
 
-              <!-- SECTION TICKETS -->
               <div class="card">
                 <h3>🎫 Configuration du Système de Tickets</h3>
                 <label>ID de la Catégorie / Salon des Tickets :</label>
@@ -235,7 +229,6 @@ app.get('/dashboard/:guildId', async (req, res) => {
                 <input type="text" name="ticket_welcome_msg" value="Bonjour ! Expliquez votre demande en détail, un membre du staff de la Centrale va vous répondre sous peu.">
               </div>
 
-              <!-- SECTION WARNS -->
               <div class="card">
                 <h3>⚠️ Système de Sanctions & Warns</h3>
                 <label>Nombre d'avertissements maximum (Max Warns) :</label>
@@ -293,7 +286,7 @@ app.get('/doc', (req, res) => {
 
           <div class="card">
             <h3>⚠️ Avertissements (Warns) & Sanctions</h3>
-            <p>Le système enregistre chaque avertissement attribué à un utilisateur (\`!warn\`). Lorsque le plafond défini sur le dashboard est atteint, la sanction prédéfinie (Exclusion, Expulsion ou Bannissement) est appliquée immédiatement sans intervention manuelle.</p>
+            <p>Le système enregistre chaque avertissement attribué à un utilisateur (!warn). Lorsque le plafond défini sur le dashboard est atteint, la sanction prédéfinie (Exclusion, Expulsion ou Bannissement) est appliquée immédiatement sans intervention manuelle.</p>
           </div>
 
           <a href="/" style="color:#f97316; font-weight:bold; text-decoration:none;">← Retour à l'accueil</a>
@@ -304,7 +297,7 @@ app.get('/doc', (req, res) => {
   `);
 });
 
-// 5. CONDITIONS D'UTILISATION (TOS)
+// 5. TOS
 app.get('/tos', (req, res) => {
   res.send(`
     <html lang="fr">
@@ -329,7 +322,7 @@ app.get('/tos', (req, res) => {
             <p>En invitant ou en utilisant le bot Discord <strong>LA CENTRALE FR SÉCURITÉ</strong> sur votre serveur Discord, ou en accédant à cette plateforme Web de gestion, vous reconnaissez avoir lu, compris et accepté sans réserve l'intégralité des présentes conditions d'utilisation.</p>
 
             <h3>2. Utilisation Conforme et Règles du Service</h3>
-            <p>L'administrateur et les utilisateurs du service s'engagent à ne pas exploiter le bot à des fins illégales, frauduleuses, malveillantes ou visant à perturber le réseau Discord. Il est strictement interdit de tenter de contourner les protections de sécurité du bot, de lancer des attaques par déni de service (DDoS) ou d'abuser des API du service. Tout manquement à cette règle entraînera un bannissement définitif et irrévocable de vos serveurs de notre infrastructure.</p>
+            <p>L'administrateur et les utilisateurs du service s'engagent à ne pas exploiter le bot à des fins illégales, frauduleuses, malveillantes ou visant à perturber le réseau Discord. Il est strictly interdit de tenter de contourner les protections de sécurité du bot, de lancer des attaques par déni de service (DDoS) ou d'abuser des API du service. Tout manquement à cette règle entraînera un bannissement définitif et irrévocable de vos serveurs de notre infrastructure.</p>
 
             <h3>3. Responsabilité de l'Équipe d'Administration</h3>
             <p>Le service est fourni "tel quel", sans garantie de disponibilité ininterrompue. L'équipe de développement de LA CENTRALE FR SÉCURITÉ ne saurait être tenue pour responsable en cas de perte accidentelle de données, de mauvaise configuration d'un serveur par ses administrateurs, ou d'interruption temporaire de service liée à la maintenance de nos hébergeurs.</p>
@@ -343,7 +336,7 @@ app.get('/tos', (req, res) => {
   `);
 });
 
-// 6. POLITIQUE DE CONFIDENTIALITÉ (PRIVACY)
+// 6. CONFIDENTIALITÉ
 app.get('/privacy', (req, res) => {
   res.send(`
     <html lang="fr">
@@ -368,7 +361,19 @@ app.get('/privacy', (req, res) => {
             <p>Afin d'assurer les fonctionnalités du service (modération, tickets et configuration), LA CENTRALE FR SÉCURITÉ enregistre uniquement les informations strictement indispensables : les identifiants numériques (IDs) des serveurs, des salons, des rôles configurés, ainsi que le registre des avertissements délivrés aux membres.</p>
 
             <h3>2. Protection, Utilisation et Non-Revente</h3>
-            <p>Toutes les données recueillies restent strictement confidentielles et réservées au bon fonctionnement des algorithmes de sécurité du bot. Elles ne sont **jamais** vendues, louées, commercialisées ou transmises à des entités tierces.</p>
+            <p>Toutes les données recueillies restent strictement confidentielles et réservées au bon fonctionnement des algorithmes de sécurité du bot. Elles ne sont jamais vendues, louées, commercialisées ou transmises à des entités tierces.</p>
 
             <h3>3. Droit de Suppression des Données (RGPD)</h3>
-            <p>Conformément aux réglementations relatives à la protection de la vie privée, tout administrateur a la possibilité de demander la suppression 
+            <p>Conformément aux réglementations relatives à la protection de la vie privée, tout administrateur a la possibilité de demander la suppression intégrale des données enregistrées concernant son serveur. Pour ce faire, il suffit de supprimer le bot du serveur ou de formuler la demande directement sur notre serveur de support.</p>
+          </div>
+          <br>
+          <a href="/" style="color:#f97316; font-weight:bold; text-decoration:none;">← Retour à l'accueil</a>
+        </div>
+        ${FOOTER_HTML}
+      </body>
+    </html>
+  `);
+});
+
+// 7. SAUVEGARDE CONFIG
+app.post('
