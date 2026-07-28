@@ -1,245 +1,168 @@
-// ==========================================
-// 1. SERVEUR WEB POUR RENDER
-// ==========================================
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('La Centrale est active ! 🛡️'));
+app.listen(PORT);
 
-app.get('/', (req, res) => {
-  res.send('La Centrale Sécurité est opérationnelle ! 🛡️');
-});
-
-app.listen(PORT, () => {
-  console.log(`Serveur web à l'écoute sur le port ${PORT}`);
-});
-
-// ==========================================
-// 2. INITIALISATION ET SLASH COMMANDS
-// ==========================================
 const { 
-  Client, 
-  GatewayIntentBits, 
-  PermissionFlagsBits, 
-  ChannelType, 
-  EmbedBuilder, 
-  ActionRowBuilder, 
-  ButtonBuilder, 
-  ButtonStyle, 
-  StringSelectMenuBuilder,
-  StringSelectMenuOptionBuilder,
-  AttachmentBuilder,
-  REST,
-  Routes,
-  SlashCommandBuilder
+  Client, GatewayIntentBits, PermissionFlagsBits, ChannelType, EmbedBuilder, 
+  ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder,
+  AttachmentBuilder, REST, Routes, SlashCommandBuilder 
 } = require('discord.js');
 
-const client = new Client({
+const client = new Client({ 
   intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.Guilds, 
+    GatewayIntentBits.GuildMessages, 
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers
-  ]
+  ] 
 });
 
-// Enregistrement de la commande Slash /setup-ticket
+// Mémoire pour le rôle staff par serveur
+const supportRoles = new Map(); 
+
 const commands = [
   new SlashCommandBuilder()
     .setName('setup-ticket')
-    .setDescription('Affiche le panneau de création de ticket support')
+    .setDescription('Configure le panneau de tickets')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+  new SlashCommandBuilder()
+    .setName('setup-support-role')
+    .setDescription('Définit le rôle qui gère les tickets')
+    .addRoleOption(option => option.setName('role').setDescription('Le rôle staff').setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-].map(command => command.toJSON());
-
-const userWarns = new Map();
+].map(c => c.toJSON());
 
 client.on('ready', async () => {
-  console.log(`🛡️ Bot La Centrale Sécurité connecté : ${client.user.tag}`);
-
-  // Enregistrement automatique des commandes / auprès de Discord
+  console.log(`🛡️ Bot connecté : ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
-  try {
-    console.log('🔄 Enregistrement des commandes Slash (/)...');
-    await rest.put(
-      Routes.applicationCommands(client.user.id),
-      { body: commands }
-    );
-    console.log('✅ Commandes Slash enregistrées avec succès !');
-  } catch (error) {
-    console.error('Erreur lors de l\'enregistrement des Slash Commands :', error);
-  }
+  await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
 });
 
-// ==========================================
-// 3. SÉCURITÉ AVANCÉE (Anti-Spam, Anti-Ping, Anti-Dox)
-// ==========================================
-client.on('messageCreate', async (message) => {
-  if (message.author.bot || !message.guild) return;
-  if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
-
-  const content = message.content;
-
-  // --- ANTI-MASS PING ---
-  const mentionCount = message.mentions.users.size + message.mentions.roles.size;
-  if (mentionCount >= 3) {
-    await message.delete().catch(() => {});
-    await message.channel.send(`⚠️ ${message.author}, les pings massifs ne sont pas autorisés !`);
-    return applyWarn(message.member, "Pings massifs");
-  }
-
-  // --- ANTI-DOX & NETTOYAGE ZALGO ---
-  const cleanContent = content.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  const phoneRegex = /(?:(?:\+|00)33|0)[1-9](?:[\s.-]*\d{2}){4}/g;
-  const ipRegex = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
-
-  if (phoneRegex.test(cleanContent) || ipRegex.test(cleanContent)) {
-    await message.delete().catch(() => {});
-    await message.channel.send(`🛡️ **La Centrale Security** : Message supprimé (détection de données sensibles).`);
-    return applyWarn(message.member, "Tentative de Doxing / Fuite de données");
-  }
-});
-
-async function applyWarn(member, reason) {
-  const userId = member.id;
-  const currentWarns = (userWarns.get(userId) || 0) + 1;
-  userWarns.set(userId, currentWarns);
-
-  if (currentWarns === 1) {
-    member.send(`⚠️ **Avertissement [La Centrale]** : ${reason}. Attention aux récidives !`).catch(() => {});
-  } else if (currentWarns === 2) {
-    await member.timeout(10 * 60 * 1000, reason).catch(() => {});
-  } else if (currentWarns >= 3) {
-    await member.ban({ reason: `Récidive : ${reason}` }).catch(() => {});
-  }
-}
-
-// ==========================================
-// 4. GESTION DES COMMANDES ET TICKETS
-// ==========================================
-
-// Commande Slash /setup-ticket
 client.on('interactionCreate', async (interaction) => {
+  // 1. COMMANDES SLASH
   if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'setup-support-role') {
+      const role = interaction.options.getRole('role');
+      supportRoles.set(interaction.guild.id, role.id);
+      await interaction.reply({ content: `✅ Rôle support défini sur : ${role.name}`, ephemeral: true });
+    }
+    
     if (interaction.commandName === 'setup-ticket') {
       const embed = new EmbedBuilder()
         .setTitle("🎫 Central Assistance - Support & Sécurité")
-        .setDescription("Choisissez la catégorie correspondant à votre demande dans le menu déroulant ci-dessous pour ouvrir un ticket.")
+        .setDescription("Besoin d'aide ? Choisissez l'option qui correspond à votre demande dans le menu déroulant :")
         .setColor("#5865F2");
 
-      const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('select_ticket_category')
-        .setPlaceholder('👉 Choisissez une option...')
-        .addOptions(
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Signalement / Anti-Dox')
-            .setDescription('Signaler une fuite de données, un raid ou un membre')
-            .setValue('ticket_dox')
-            .setEmoji('🛡️'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Support Général')
-            .setDescription('Poser une question ou demander de l\'aide au staff')
-            .setValue('ticket_support')
-            .setEmoji('❓'),
-          new StringSelectMenuOptionBuilder()
-            .setLabel('Partenariat')
-            .setDescription('Proposer un partenariat avec La Centrale')
-            .setValue('ticket_partenariat')
-            .setEmoji('🤝')
-        );
-
-      const row = new ActionRowBuilder().addComponents(selectMenu);
-
-      await interaction.reply({ content: '✅ Panneau de ticket configuré !', ephemeral: true });
-      await interaction.channel.send({ embeds: [embed], components: [row] });
-    }
-  }
-
-  // --- SELECTION DANS LE MENU DÉROULANT ---
-  if (interaction.isStringSelectMenu()) {
-    if (interaction.customId === 'select_ticket_category') {
-      const category = interaction.values[0];
-      let prefix = 'ticket';
-      let categoryName = 'Support';
-
-      if (category === 'ticket_dox') { prefix = 'dox'; categoryName = '🛡️ Signalement Dox/Sécurité'; }
-      if (category === 'ticket_support') { prefix = 'help'; categoryName = '❓ Support Général'; }
-      if (category === 'ticket_partenariat') { prefix = 'partenariat'; categoryName = '🤝 Partenariat'; }
-
-      const channelName = `${prefix}-${interaction.user.username}`;
-      const existingChannel = interaction.guild.channels.cache.find(c => c.name === channelName.toLowerCase());
-
-      if (existingChannel) {
-        return interaction.reply({ content: `❌ Tu as déjà un ticket ouvert : ${existingChannel}`, ephemeral: true });
-      }
-
-      // Création du salon privé
-      const ticketChannel = await interaction.guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        permissionOverwrites: [
-          {
-            id: interaction.guild.id,
-            deny: [PermissionFlagsBits.ViewChannel],
-          },
-          {
-            id: interaction.user.id,
-            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles],
-          },
-        ],
-      });
-
-      const embedTicket = new EmbedBuilder()
-        .setTitle(`🎫 Ticket : ${categoryName}`)
-        .setDescription(`Bonjour <@${interaction.user.id}>,\nUn membre de l'équipe arrive. Explique ton problème ou ta demande en détail.`)
-        .setColor("#28a745");
-
-      const rowTicket = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId('close_ticket')
-          .setLabel('Fermer le ticket')
-          .setEmoji('🔒')
-          .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-          .setCustomId('transcript_close_ticket')
-          .setLabel('Transcript + Fermer')
-          .setEmoji('📑')
-          .setStyle(ButtonStyle.Secondary)
+      const menu = new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder().setCustomId('ticket_select').setPlaceholder('👉 Choisis ta catégorie...').addOptions([
+          { label: 'Contacter le Staff', value: 'staff', emoji: '🔰' },
+          { label: 'Partenariat & Collab', value: 'partenariat', emoji: '🤝' },
+          { label: 'Signalement', value: 'signalement', emoji: '❗' },
+          { label: 'Question', value: 'question', emoji: '❓' },
+          { label: 'Urgent / Prioritaire', value: 'urgent', emoji: '🚨' }
+        ])
       );
-
-      await ticketChannel.send({ content: `<@${interaction.user.id}>`, embeds: [embedTicket], components: [rowTicket] });
-      await interaction.reply({ content: `✅ Ton ticket a été créé : ${ticketChannel}`, ephemeral: true });
+      await interaction.reply({ content: '✅ Panneau configuré avec succès !', ephemeral: true });
+      await interaction.channel.send({ embeds: [embed], components: [menu] });
     }
   }
 
-  // --- FERMETURE SIMPLE ---
-  if (interaction.isButton()) {
-    if (interaction.customId === 'close_ticket') {
-      await interaction.reply("🔒 Fermeture du ticket dans 5 secondes...");
-      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+  // 2. CRÉATION DU TICKET VIA MENU DÉROULANT
+  if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
+    const roleId = supportRoles.get(interaction.guild.id);
+    
+    const overwrites = [
+      { id: interaction.guild.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: interaction.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles] }
+    ];
+    
+    if (roleId) {
+      overwrites.push({ id: roleId, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ManageMessages] });
     }
 
-    // --- TRANSCRIPT + FERMETURE ---
-    if (interaction.customId === 'transcript_close_ticket') {
-      await interaction.reply("📑 Génération du transcript en cours...");
+    const channel = await interaction.guild.channels.create({
+      name: `ticket-${interaction.user.username}`,
+      type: ChannelType.GuildText,
+      topic: interaction.user.id, // On sauvegarde l'ID du créateur dans le sujet du salon
+      permissionOverwrites: overwrites
+    });
+    
+    const embed = new EmbedBuilder()
+      .setTitle(`🎫 Ticket - ${interaction.values[0].toUpperCase()}`)
+      .setDescription(`Bonjour <@${interaction.user.id}>,\nUn membre du staff va prendre en charge ta demande. Explique ton problème ci-dessous.\n\n*Utilisez les boutons ci-dessous pour gérer le salon.*`)
+      .setColor("#28a745");
 
+    // Boutons de gestion placés bien en haut du salon
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('close_simple').setLabel('Fermer').setStyle(ButtonStyle.Danger).setEmoji('🔒'),
+      new ButtonBuilder().setCustomId('close_transcript').setLabel('Fermer + Transcript MP').setStyle(ButtonStyle.Secondary).setEmoji('📑')
+    );
+
+    await channel.send({ content: `<@${interaction.user.id}> ${roleId ? `<@&${roleId}>` : ''}`, embeds: [embed], components: [row] });
+    await interaction.reply({ content: `✅ Ton ticket a été créé : ${channel}`, ephemeral: true });
+  }
+
+  // 3. FERMETURE ET TRANSCRIPT PAR LE STAFF
+  if (interaction.isButton()) {
+    const roleId = supportRoles.get(interaction.guild.id);
+    const isStaff = interaction.member.permissions.has(PermissionFlagsBits.ManageChannels) || (roleId && interaction.member.roles.cache.has(roleId));
+
+    if (!isStaff) {
+      return interaction.reply({ content: "❌ Seul un membre du Staff peut fermer ce ticket !", ephemeral: true });
+    }
+
+    // A) FERMETURE SIMPLE
+    if (interaction.customId === 'close_simple') {
+      await interaction.reply("🔒 **Fermeture du ticket dans 3 secondes...**");
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+    }
+
+    // B) FERMETURE + TRANSCRIPT EN MP
+    if (interaction.customId === 'close_transcript') {
+      await interaction.reply("📑 **Génération du transcript et envoi au membre...**");
+
+      // On récupère l'ID du créateur du ticket qu'on avait sauvé dans le sujet du salon (topic)
+      const ticketOwnerId = interaction.channel.topic; 
+      const ticketOwner = await client.users.fetch(ticketOwnerId).catch(() => null);
+
+      // Récupération des 100 derniers messages
       const messages = await interaction.channel.messages.fetch({ limit: 100 });
-      let transcriptText = `--- TRANSCRIPT DU TICKET : ${interaction.channel.name} ---\n\n`;
+      let transcriptText = `==============================================\n`;
+      transcriptText += `   TRANSCRIPT DU TICKET : #${interaction.channel.name}\n`;
+      transcriptText += `   Fermé par : ${interaction.user.tag}\n`;
+      transcriptText += `==============================================\n\n`;
 
       messages.reverse().forEach(msg => {
-        transcriptText += `[${msg.createdAt.toLocaleString('fr-FR')}] ${msg.author.tag} : ${msg.content}\n`;
+        if (!msg.author.bot || msg.embeds.length === 0) {
+          transcriptText += `[${msg.createdAt.toLocaleString('fr-FR')}] ${msg.author.tag} : ${msg.content}\n`;
+        }
       });
 
       const buffer = Buffer.from(transcriptText, 'utf-8');
       const attachment = new AttachmentBuilder(buffer, { name: `transcript-${interaction.channel.name}.txt` });
 
-      await interaction.user.send({ content: `📑 Voici le transcript de votre ticket :`, files: [attachment] }).catch(() => {});
-      await interaction.channel.send({ content: "✅ Transcript généré et envoyé en MP. Fermeture du salon...", files: [attachment] });
+      // Envoi du transcript en MP au membre qui a créé le ticket
+      let sentInMp = false;
+      if (ticketOwner) {
+        try {
+          await ticketOwner.send({
+            content: `📑 **Voici le transcript de ton ticket sur le serveur ${interaction.guild.name} :**`,
+            files: [attachment]
+          });
+          sentInMp = true;
+        } catch (err) {
+          console.log("Impossible d'envoyer le MP au membre (MP fermés).");
+        }
+      }
 
-      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+      const msgStatus = sentInMp ? "✅ Transcript envoyé en MP au membre !" : "⚠️ Impossible d'envoyer le MP au membre (ses MP sont fermés).";
+      await interaction.channel.send({ content: `${msgStatus}\n🔒 Suppression du salon dans 3 secondes...` });
+
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
     }
   }
 });
 
-// ==========================================
-// 5. CONNEXION DU BOT
-// ==========================================
 client.login(process.env.TOKEN);
