@@ -48,16 +48,17 @@ app.get('/callback', async (req, res) => {
     // Filtrer les serveurs où l'utilisateur est Admin (permission 0x8)
     const adminGuilds = Array.isArray(guilds) ? guilds.filter(g => (g.permissions & 0x8) === 0x8) : [];
 
-    // Création de la liste des serveurs
+      // Création de la liste des serveurs
     let guildsHTML = adminGuilds.map(g => `
       <div style="background:#1e293b; padding:15px; border-radius:8px; margin:10px 0; display:flex; justify-content:space-between; align-items:center;">
         <div style="display:flex; align-items:center; gap:10px;">
           ${g.icon ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" width="40" style="border-radius:50%;">` : '🛡️'}
           <span style="font-weight:bold;">${g.name}</span>
         </div>
-        <a href="https://discord.com/oauth2/authorize?client_id=1531412187392901120&scope=bot&permissions=8&guild_id=${g.id}" target="_blank" style="background:#5865F2; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>
+        <a href="/dashboard/${g.id}" style="background:#22c55e; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>
       </div>
     `).join('');
+    
 
     // Affichage de la page du panel
     res.send(`
