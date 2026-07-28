@@ -18,8 +18,8 @@ app.use(session({
 
 app.use(express.static('public'));
 
-// 🖼️ URL de TON logo Discord
-const LOGO_URL = 'https://cdn.discordapp.com/attachments/1531658635254566992/1531733054161289307/1785187451514.png?ex=6a6a4912&is=6a68f792&hm=2cc6039484d64af25fef6bfc595eebf483f3fa08a223aeda147dfad9e4f862c9&'; 
+// 🖼️ Ton logo hébergé directement sur GitHub
+const LOGO_URL = '/1785187451514.png';
 
 // 1. Page d'accueil (Connexion / Inscription Pro)
 app.get('/', (req, res) => {
