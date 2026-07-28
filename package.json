@@ -6,8 +6,10 @@
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {
+    "dependencies": {
     "discord.js": "^14.14.1",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "express-session": "^1.17.3"
+    }
+  
   }
-}
