@@ -3,15 +3,14 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Serveur de fichiers statiques si besoin
+app.use(express.static('public'));
+
 // 1. Page d'accueil
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// 2. Page de retour après la connexion Discord (le code que tu as sur ton écran)
-app.get('/callback', async (req, res) => {
-...
-  
 // 2. Page de retour après la connexion Discord
 app.get('/callback', async (req, res) => {
   const code = req.query.code;
@@ -32,43 +31,35 @@ app.get('/callback', async (req, res) => {
     });
 
     const tokenData = await tokenResponse.json();
-    if (!tokenData.access_token) return res.send('Erreur lors de la récupération du token.');
+    if (!tokenData.access_token) return res.send('Erreur lors de la récupération du token Discord.');
 
-    // Récupération des infos utilisateur & serveurs
+    // Récupération des infos utilisateur
     const userResponse = await fetch('https://discord.com/api/users/@me', {
       headers: { authorization: `${tokenData.token_type} ${tokenData.access_token}` },
     });
     const user = await userResponse.json();
 
+    // Récupération des serveurs
     const guildsResponse = await fetch('https://discord.com/api/users/@me/guilds', {
       headers: { authorization: `${tokenData.token_type} ${tokenData.access_token}` },
     });
     const guilds = await guildsResponse.json();
 
-    // Filtrer les serveurs où l'utilisateur est Admin
-    const adminGuilds = guilds.filter(g => (g.permissions & 0x8) === 0x8);
+    // Filtrer les serveurs où l'utilisateur est Admin (permission 0x8)
+    const adminGuilds = Array.isArray(guilds) ? guilds.filter(g => (g.permissions & 0x8) === 0x8) : [];
 
-    // ICI : Création de la liste des serveurs (guildsHTML)
-    let guildsHTML = adminGuilds.map(g => {
-      const botInGuild = client.guilds.cache.has(g.id);
-
-      return `
-        <div style="background:#1e293b; padding:15px; border-radius:8px; margin:10px 0; display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; align-items:center; gap:10px;">
-            ${g.icon ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" width="40" style="border-radius:50%;">` : '🛡️'}
-            <span style="font-weight:bold;">${g.name}</span>
-          </div>
-          <div>
-            ${botInGuild 
-              ? `<a href="/dashboard/${g.id}" style="background:#22c55e; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>`
-              : `<a href="https://discord.com/oauth2/authorize?client_id=1531412187392901120&scope=bot&permissions=8&guild_id=${g.id}" target="_blank" style="background:#5865F2; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">➕ Ajouter le bot</a>`
-            }
-          </div>
+    // Création de la liste des serveurs
+    let guildsHTML = adminGuilds.map(g => `
+      <div style="background:#1e293b; padding:15px; border-radius:8px; margin:10px 0; display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          ${g.icon ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" width="40" style="border-radius:50%;">` : '🛡️'}
+          <span style="font-weight:bold;">${g.name}</span>
         </div>
-      `;
-    }).join('');
+        <a href="https://discord.com/oauth2/authorize?client_id=1531412187392901120&scope=bot&permissions=8&guild_id=${g.id}" target="_blank" style="background:#5865F2; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>
+      </div>
+    `).join('');
 
-    // ICI : Envoi du HTML avec les serveurs affichés
+    // Affichage de la page du panel
     res.send(`
       <html lang="fr">
         <head>
@@ -88,6 +79,11 @@ app.get('/callback', async (req, res) => {
     console.error(err);
     res.send("Une erreur s'est produite lors de la connexion.");
   }
+});
+
+// Lancement du serveur Web
+app.listen(PORT, () => {
+  console.log(`Serveur web lancé sur le port ${PORT}`);
 });
 
 const { 
