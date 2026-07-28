@@ -1,4 +1,6 @@
-// --- SERVEUR WEB POUR OUVRIR LE PORT RENDER ---
+// ==========================================
+// 1. SERVEUR WEB POUR RENDER
+// ==========================================
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,9 +12,26 @@ app.get('/', (req, res) => {
 app.listen(PORT, () => {
   console.log(`Serveur web à l'écoute sur le port ${PORT}`);
 });
-// ----------------------------------------------
 
-const { Client, GatewayIntentBits } = require('discord.js');
+// ==========================================
+// 2. INITIALISATION ET SLASH COMMANDS
+// ==========================================
+const { 
+  Client, 
+  GatewayIntentBits, 
+  PermissionFlagsBits, 
+  ChannelType, 
+  EmbedBuilder, 
+  ActionRowBuilder, 
+  ButtonBuilder, 
+  ButtonStyle, 
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
+  AttachmentBuilder,
+  REST,
+  Routes,
+  SlashCommandBuilder
+} = require('discord.js');
 
 const client = new Client({
   intents: [
@@ -23,98 +42,204 @@ const client = new Client({
   ]
 });
 
-// Suivi pour l'Anti-Spam et l'Anti-Raid
-const userMessages = new Map();
-const recentJoins = [];
+// Enregistrement de la commande Slash /setup-ticket
+const commands = [
+  new SlashCommandBuilder()
+    .setName('setup-ticket')
+    .setDescription('Affiche le panneau de création de ticket support')
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+].map(command => command.toJSON());
 
-client.on('ready', () => {
+const userWarns = new Map();
+
+client.on('ready', async () => {
   console.log(`🛡️ Bot La Centrale Sécurité connecté : ${client.user.tag}`);
-});
 
-// 1. ANTI-RAID : Détection d'arrivées massives de membres
-client.on('guildMemberAdd', async (member) => {
-  const now = Date.now();
-  recentJoins.push(now);
-
-  // Garde uniquement les arrivées des 10 dernières secondes
-  const tenSecondsAgo = now - 10000;
-  while (recentJoins.length > 0 && recentJoins[0] < tenSecondsAgo) {
-    recentJoins.shift();
-  }
-
-  // Si plus de 5 personnes rejoignent en moins de 10 secondes -> Alerte Raid
-  if (recentJoins.length >= 5) {
-    console.warn(`🚨 ALERTE RAID détectée sur le serveur ${member.guild.name} !`);
-    
-    // Essaye de trouver un salon textuel pour prévenir les admins
-    const systemChannel = member.guild.systemChannel || member.guild.channels.cache.find(c => c.type === 0 && c.permissionsFor(member.guild.members.me).has('SendMessages'));
-    if (systemChannel) {
-      systemChannel.send(`🚨 **ALERTE ANTI-RAID** : Détection d'une vague de rejointes suspectes (${recentJoins.length} membres en 10s) ! Les modérateurs sont invités à vérifier.`);
-    }
+  // Enregistrement automatique des commandes / auprès de Discord
+  const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+  try {
+    console.log('🔄 Enregistrement des commandes Slash (/)...');
+    await rest.put(
+      Routes.applicationCommands(client.user.id),
+      { body: commands }
+    );
+    console.log('✅ Commandes Slash enregistrées avec succès !');
+  } catch (error) {
+    console.error('Erreur lors de l\'enregistrement des Slash Commands :', error);
   }
 });
 
-// 2. ANTI-DOX + ANTI-SPAM + ANTI-MASS MENTION
+// ==========================================
+// 3. SÉCURITÉ AVANCÉE (Anti-Spam, Anti-Ping, Anti-Dox)
+// ==========================================
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild) return;
+  if (message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-  const now = Date.now();
-  const userId = message.author.id;
+  const content = message.content;
 
-  // --- A. SYSTEME ANTI-DOX / LIENS SUSPECTS ---
-  const liensInterdits = ['grabify.link', 'iplogger.org', '2no.co', 'statcounter.com', 'leakbyte.com'];
-  const contientLienSuspect = liensInterdits.some(lien => message.content.toLowerCase().includes(lien));
+  // --- ANTI-MASS PING ---
+  const mentionCount = message.mentions.users.size + message.mentions.roles.size;
+  if (mentionCount >= 3) {
+    await message.delete().catch(() => {});
+    await message.channel.send(`⚠️ ${message.author}, les pings massifs ne sont pas autorisés !`);
+    return applyWarn(message.member, "Pings massifs");
+  }
 
-  if (contientLienSuspect) {
-    try {
-      await message.delete();
-      return message.channel.send(`⚠️ ${message.author}, les liens de ce type sont strictement interdits pour la sécurité du serveur !`);
-    } catch (err) {
-      console.error("Erreur suppression Anti-Dox :", err);
+  // --- ANTI-DOX & NETTOYAGE ZALGO ---
+  const cleanContent = content.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const phoneRegex = /(?:(?:\+|00)33|0)[1-9](?:[\s.-]*\d{2}){4}/g;
+  const ipRegex = /\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b/g;
+
+  if (phoneRegex.test(cleanContent) || ipRegex.test(cleanContent)) {
+    await message.delete().catch(() => {});
+    await message.channel.send(`🛡️ **La Centrale Security** : Message supprimé (détection de données sensibles).`);
+    return applyWarn(message.member, "Tentative de Doxing / Fuite de données");
+  }
+});
+
+async function applyWarn(member, reason) {
+  const userId = member.id;
+  const currentWarns = (userWarns.get(userId) || 0) + 1;
+  userWarns.set(userId, currentWarns);
+
+  if (currentWarns === 1) {
+    member.send(`⚠️ **Avertissement [La Centrale]** : ${reason}. Attention aux récidives !`).catch(() => {});
+  } else if (currentWarns === 2) {
+    await member.timeout(10 * 60 * 1000, reason).catch(() => {});
+  } else if (currentWarns >= 3) {
+    await member.ban({ reason: `Récidive : ${reason}` }).catch(() => {});
+  }
+}
+
+// ==========================================
+// 4. GESTION DES COMMANDES ET TICKETS
+// ==========================================
+
+// Commande Slash /setup-ticket
+client.on('interactionCreate', async (interaction) => {
+  if (interaction.isChatInputCommand()) {
+    if (interaction.commandName === 'setup-ticket') {
+      const embed = new EmbedBuilder()
+        .setTitle("🎫 Central Assistance - Support & Sécurité")
+        .setDescription("Choisissez la catégorie correspondant à votre demande dans le menu déroulant ci-dessous pour ouvrir un ticket.")
+        .setColor("#5865F2");
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('select_ticket_category')
+        .setPlaceholder('👉 Choisissez une option...')
+        .addOptions(
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Signalement / Anti-Dox')
+            .setDescription('Signaler une fuite de données, un raid ou un membre')
+            .setValue('ticket_dox')
+            .setEmoji('🛡️'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Support Général')
+            .setDescription('Poser une question ou demander de l\'aide au staff')
+            .setValue('ticket_support')
+            .setEmoji('❓'),
+          new StringSelectMenuOptionBuilder()
+            .setLabel('Partenariat')
+            .setDescription('Proposer un partenariat avec La Centrale')
+            .setValue('ticket_partenariat')
+            .setEmoji('🤝')
+        );
+
+      const row = new ActionRowBuilder().addComponents(selectMenu);
+
+      await interaction.reply({ content: '✅ Panneau de ticket configuré !', ephemeral: true });
+      await interaction.channel.send({ embeds: [embed], components: [row] });
     }
   }
 
-  // --- B. SYSTEME ANTI-RAID : MASS MENTION (@everyone / @here) ---
-  if (message.mentions.everyone || message.mentions.roles.size > 3) {
-    // Si l'utilisateur n'est pas admin et mentionne @everyone/@here
-    if (!message.member.permissions.has('Administrator')) {
-      try {
-        await message.delete();
-        return message.channel.send(`🚨 ${message.author}, les mentions massives sont interdites (Anti-Raid) !`);
-      } catch (err) {
-        console.error("Erreur suppression Mass-Mention :", err);
+  // --- SELECTION DANS LE MENU DÉROULANT ---
+  if (interaction.isStringSelectMenu()) {
+    if (interaction.customId === 'select_ticket_category') {
+      const category = interaction.values[0];
+      let prefix = 'ticket';
+      let categoryName = 'Support';
+
+      if (category === 'ticket_dox') { prefix = 'dox'; categoryName = '🛡️ Signalement Dox/Sécurité'; }
+      if (category === 'ticket_support') { prefix = 'help'; categoryName = '❓ Support Général'; }
+      if (category === 'ticket_partenariat') { prefix = 'partenariat'; categoryName = '🤝 Partenariat'; }
+
+      const channelName = `${prefix}-${interaction.user.username}`;
+      const existingChannel = interaction.guild.channels.cache.find(c => c.name === channelName.toLowerCase());
+
+      if (existingChannel) {
+        return interaction.reply({ content: `❌ Tu as déjà un ticket ouvert : ${existingChannel}`, ephemeral: true });
       }
+
+      // Création du salon privé
+      const ticketChannel = await interaction.guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        permissionOverwrites: [
+          {
+            id: interaction.guild.id,
+            deny: [PermissionFlagsBits.ViewChannel],
+          },
+          {
+            id: interaction.user.id,
+            allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.AttachFiles],
+          },
+        ],
+      });
+
+      const embedTicket = new EmbedBuilder()
+        .setTitle(`🎫 Ticket : ${categoryName}`)
+        .setDescription(`Bonjour <@${interaction.user.id}>,\nUn membre de l'équipe arrive. Explique ton problème ou ta demande en détail.`)
+        .setColor("#28a745");
+
+      const rowTicket = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId('close_ticket')
+          .setLabel('Fermer le ticket')
+          .setEmoji('🔒')
+          .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+          .setCustomId('transcript_close_ticket')
+          .setLabel('Transcript + Fermer')
+          .setEmoji('📑')
+          .setStyle(ButtonStyle.Secondary)
+      );
+
+      await ticketChannel.send({ content: `<@${interaction.user.id}>`, embeds: [embedTicket], components: [rowTicket] });
+      await interaction.reply({ content: `✅ Ton ticket a été créé : ${ticketChannel}`, ephemeral: true });
     }
   }
 
-  // --- C. SYSTEME ANTI-SPAM ---
-  if (!userMessages.has(userId)) {
-    userMessages.set(userId, []);
-  }
+  // --- FERMETURE SIMPLE ---
+  if (interaction.isButton()) {
+    if (interaction.customId === 'close_ticket') {
+      await interaction.reply("🔒 Fermeture du ticket dans 5 secondes...");
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
+    }
 
-  const timestamps = userMessages.get(userId);
-  timestamps.push(now);
+    // --- TRANSCRIPT + FERMETURE ---
+    if (interaction.customId === 'transcript_close_ticket') {
+      await interaction.reply("📑 Génération du transcript en cours...");
 
-  // On garde les messages envoyés dans les 4 dernières secondes
-  const fourSecondsAgo = now - 4000;
-  const recentMessages = timestamps.filter(time => time > fourSecondsAgo);
-  userMessages.set(userId, recentMessages);
+      const messages = await interaction.channel.messages.fetch({ limit: 100 });
+      let transcriptText = `--- TRANSCRIPT DU TICKET : ${interaction.channel.name} ---\n\n`;
 
-  // Si l'utilisateur envoie plus de 4 messages en 4 secondes -> SPAM
-  if (recentMessages.length >= 4) {
-    try {
-      await message.delete();
-      
-      // Envoie un avertissement s'il n'a pas déjà été prévenu
-      if (recentMessages.length === 4) {
-        const warningMsg = await message.channel.send(`⚠️ ${message.author}, calme le spam ! Tes messages sont supprimés.`);
-        setTimeout(() => warningMsg.delete().catch(() => {}), 5000); // Supprime l'avertissement au bout de 5s
-      }
-    } catch (err) {
-      console.error("Erreur suppression Anti-Spam :", err);
+      messages.reverse().forEach(msg => {
+        transcriptText += `[${msg.createdAt.toLocaleString('fr-FR')}] ${msg.author.tag} : ${msg.content}\n`;
+      });
+
+      const buffer = Buffer.from(transcriptText, 'utf-8');
+      const attachment = new AttachmentBuilder(buffer, { name: `transcript-${interaction.channel.name}.txt` });
+
+      await interaction.user.send({ content: `📑 Voici le transcript de votre ticket :`, files: [attachment] }).catch(() => {});
+      await interaction.channel.send({ content: "✅ Transcript généré et envoyé en MP. Fermeture du salon...", files: [attachment] });
+
+      setTimeout(() => interaction.channel.delete().catch(() => {}), 5000);
     }
   }
 });
 
+// ==========================================
+// 5. CONNEXION DU BOT
+// ==========================================
 client.login(process.env.TOKEN);
-        
