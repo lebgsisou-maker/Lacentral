@@ -3,12 +3,30 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Servir la page web du panel
+// 1. Page d'accueil du panel (index.html)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
+// 2. Page de retour après connexion Discord
+app.get('/callback', (req, res) => {
+  const code = req.query.code;
+  if (!code) return res.redirect('/');
+  
+  res.send(`
+    <html lang="fr">
+      <head><title>Connexion Réussie</title></head>
+      <body style="background:#0f172a; color:white; font-family:sans-serif; text-align:center; padding-top:50px;">
+        <h1 style="color:#22c55e;">✅ Connexion réussie !</h1>
+        <p>Code d'autorisation reçu avec succès.</p>
+        <a href="/" style="color:#5865F2;">Retour au panel</a>
+      </body>
+    </html>
+  `);
+});
+
 app.listen(PORT, () => console.log(`🌐 Panel Web prêt sur le port ${PORT}`));
+
 
 const { 
   Client, GatewayIntentBits, PermissionFlagsBits, ChannelType, EmbedBuilder, 
