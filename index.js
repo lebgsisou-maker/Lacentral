@@ -3,30 +3,92 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// 1. Page d'accueil du panel (index.html)
+// 1. Page d'accueil
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'views', 'index.html'));
 });
 
-// 2. Page de retour après connexion Discord
-app.get('/callback', (req, res) => {
+// 2. Page de retour après la connexion Discord (le code que tu as sur ton écran)
+app.get('/callback', async (req, res) => {
+...
+  
+// 2. Page de retour après la connexion Discord
+app.get('/callback', async (req, res) => {
   const code = req.query.code;
   if (!code) return res.redirect('/');
-  
-  res.send(`
-    <html lang="fr">
-      <head><title>Connexion Réussie</title></head>
-      <body style="background:#0f172a; color:white; font-family:sans-serif; text-align:center; padding-top:50px;">
-        <h1 style="color:#22c55e;">✅ Connexion réussie !</h1>
-        <p>Code d'autorisation reçu avec succès.</p>
-        <a href="/" style="color:#5865F2;">Retour au panel</a>
-      </body>
-    </html>
-  `);
+
+  try {
+    // Échange du code contre le token
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: '1531412187392901120',
+        client_secret: process.env.CLIENT_SECRET,
+        grant_type: 'authorization_code',
+        code: code,
+        redirect_uri: 'https://lacentral-3s9x.onrender.com/callback',
+      }),
+    });
+
+    const tokenData = await tokenResponse.json();
+    if (!tokenData.access_token) return res.send('Erreur lors de la récupération du token.');
+
+    // Récupération des infos utilisateur & serveurs
+    const userResponse = await fetch('https://discord.com/api/users/@me', {
+      headers: { authorization: `${tokenData.token_type} ${tokenData.access_token}` },
+    });
+    const user = await userResponse.json();
+
+    const guildsResponse = await fetch('https://discord.com/api/users/@me/guilds', {
+      headers: { authorization: `${tokenData.token_type} ${tokenData.access_token}` },
+    });
+    const guilds = await guildsResponse.json();
+
+    // Filtrer les serveurs où l'utilisateur est Admin
+    const adminGuilds = guilds.filter(g => (g.permissions & 0x8) === 0x8);
+
+    // ICI : Création de la liste des serveurs (guildsHTML)
+    let guildsHTML = adminGuilds.map(g => {
+      const botInGuild = client.guilds.cache.has(g.id);
+
+      return `
+        <div style="background:#1e293b; padding:15px; border-radius:8px; margin:10px 0; display:flex; justify-content:space-between; align-items:center;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            ${g.icon ? `<img src="https://cdn.discordapp.com/icons/${g.id}/${g.icon}.png" width="40" style="border-radius:50%;">` : '🛡️'}
+            <span style="font-weight:bold;">${g.name}</span>
+          </div>
+          <div>
+            ${botInGuild 
+              ? `<a href="/dashboard/${g.id}" style="background:#22c55e; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">⚙️ Gérer</a>`
+              : `<a href="https://discord.com/oauth2/authorize?client_id=1531412187392901120&scope=bot&permissions=8&guild_id=${g.id}" target="_blank" style="background:#5865F2; color:white; padding:8px 15px; border-radius:5px; text-decoration:none; font-weight:bold;">➕ Ajouter le bot</a>`
+            }
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // ICI : Envoi du HTML avec les serveurs affichés
+    res.send(`
+      <html lang="fr">
+        <head>
+          <title>Panel de Contrôle - La Centrale</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        </head>
+        <body style="background:#0f172a; color:white; font-family:sans-serif; padding:20px; max-width:600px; margin:auto;">
+          <h2>👋 Bienvenue, ${user.username} !</h2>
+          <p style="color:#94a3b8;">Sélectionne un serveur où tu es administrateur :</p>
+          <hr style="border-color:#334155; margin-bottom:20px;">
+          ${guildsHTML || '<p>Aucun serveur trouvé où tu es administrateur.</p>'}
+        </body>
+      </html>
+    `);
+
+  } catch (err) {
+    console.error(err);
+    res.send("Une erreur s'est produite lors de la connexion.");
+  }
 });
-
-app.listen(PORT, () => console.log(`🌐 Panel Web prêt sur le port ${PORT}`));
-
 
 const { 
   Client, GatewayIntentBits, PermissionFlagsBits, ChannelType, EmbedBuilder, 
