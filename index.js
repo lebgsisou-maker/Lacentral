@@ -39,7 +39,7 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName('setup-automod')
-    .setDescription('Activer la règle AutoMod sur ce serveur (pour le badge 🛡️)')
+    .setDescription('Créer 6 règles AutoMod sur ce serveur (Pack Badge 🛡️)')
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   new SlashCommandBuilder()
@@ -76,20 +76,16 @@ client.on('ready', async () => {
   }
 });
 
-// ==========================================
-// ANTI-SPAM ET ANTI-DOX ASSOUPLI (FIN DES FAUX POSITIFS)
-// ==========================================
+// ANTI-SPAM ET ANTI-DOX (Pings massifs & IPs)
 client.on('messageCreate', async (message) => {
   if (message.author.bot || !message.guild || message.member.permissions.has(PermissionFlagsBits.Administrator)) return;
 
-  // Anti-mass ping : uniquement si 5 pings ou plus dans le même message
   const mentionCount = message.mentions.users.size + message.mentions.roles.size;
   if (mentionCount >= 5) {
     await message.delete().catch(() => {});
     return message.channel.send(`⚠️ ${message.author}, les pings massifs ne sont pas autorisés !`);
   }
 
-  // Détection stricte d'IP uniquement (pas d'e-mail, ni de texte classique)
   const ipRegex = /\b(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b/g;
 
   if (ipRegex.test(message.content)) {
@@ -101,7 +97,6 @@ client.on('messageCreate', async (message) => {
 // INTERACTION GESTION
 client.on('interactionCreate', async (interaction) => {
 
-  // --- COMMANDES SLASH ---
   if (interaction.isChatInputCommand()) {
     
     if (interaction.commandName === 'setup-support-role') {
@@ -110,26 +105,36 @@ client.on('interactionCreate', async (interaction) => {
       return interaction.reply({ content: `✅ Rôle support défini sur : **${role.name}**`, ephemeral: true });
     }
 
+    // PACK AUTOMOD OPTIMISÉ (6 règles d'un coup !)
     if (interaction.commandName === 'setup-automod') {
+      await interaction.deferReply({ ephemeral: true });
       try {
-        await interaction.guild.autoModerationRules.create({
-          name: 'La Centrale - Protection Anti-Spam',
-          creatorId: client.user.id,
-          enabled: true,
-          eventType: 1,
-          triggerType: AutoModerationRuleTriggerType.Keyword,
-          triggerMetadata: {
-            keywordFilter: ['*discord.gg/*', '*http://*', '*https://*']
-          },
-          actions: [
-            {
-              type: AutoModerationActionType.BlockMessage
-            }
-          ]
-        });
-        return interaction.reply({ content: '🛡️ **Règle AutoMod officielle créée !**', ephemeral: true });
+        const rulesToCreate = [
+          { name: 'Centrale 1 - Anti-Links', keywords: ['*discord.gg/*', '*http://*', '*https://*'] },
+          { name: 'Centrale 2 - Anti-Spam', keywords: ['*free nitro*', '*discord.gift*'] },
+          { name: 'Centrale 3 - Anti-Grabber', keywords: ['*token*', '*grabber*'] },
+          { name: 'Centrale 4 - Anti-Hacks', keywords: ['*hack*', '*cheat*'] },
+          { name: 'Centrale 5 - Anti-Malware', keywords: ['*iplogger*', '*grabify*'] },
+          { name: 'Centrale 6 - Anti-Scam', keywords: ['*giveaway*', '*win*'] }
+        ];
+
+        let createdCount = 0;
+        for (const rule of rulesToCreate) {
+          await interaction.guild.autoModerationRules.create({
+            name: rule.name,
+            creatorId: client.user.id,
+            enabled: true,
+            eventType: 1,
+            triggerType: AutoModerationRuleTriggerType.Keyword,
+            triggerMetadata: { keywordFilter: rule.keywords },
+            actions: [{ type: AutoModerationActionType.BlockMessage }]
+          }).catch(() => {});
+          createdCount++;
+        }
+
+        return interaction.editReply({ content: `🛡️ **Pack AutoMod max appliqué !** ${createdCount} règles créées sur ce serveur.` });
       } catch (err) {
-        return interaction.reply({ content: `❌ Impossible de créer la règle AutoMod : ${err.message}`, ephemeral: true });
+        return interaction.editReply({ content: `❌ Erreur : ${err.message}` });
       }
     }
 
@@ -193,7 +198,7 @@ client.on('interactionCreate', async (interaction) => {
     }
   }
 
-  // --- CRÉATION DE TICKET ---
+  // CRÉATION DE TICKET
   if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
     const roleId = supportRoles.get(interaction.guild.id);
     const selectedValue = interaction.values[0];
@@ -247,7 +252,7 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.reply({ content: `✅ Votre ticket a été créé : ${channel}`, ephemeral: true });
   }
 
-  // --- BOUTON FERMETURE ---
+  // BOUTON FERMETURE
   if (interaction.isButton()) {
     const roleId = supportRoles.get(interaction.guild.id);
     const hasModPerms = interaction.member.permissions.has(PermissionFlagsBits.ManageMessages) || interaction.member.permissions.has(PermissionFlagsBits.Administrator);
@@ -276,7 +281,7 @@ client.on('interactionCreate', async (interaction) => {
     return interaction.showModal(modal);
   }
 
-  // --- FORMULAIRE MOTIF ---
+  // FORMULAIRE MOTIF
   if (interaction.isModalSubmit()) {
     const reason = interaction.fields.getTextInputValue('close_reason');
 
@@ -327,4 +332,4 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.login(process.env.TOKEN);
-                        
+        
