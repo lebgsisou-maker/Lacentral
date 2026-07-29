@@ -1,6 +1,5 @@
-const { Client, GatewayIntentBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, StringSelectMenuBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, REST, Routes, StringSelectMenuBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const express = require('express');
-const session = require('express-session');
 const fs = require('fs');
 const discordTranscripts = require('discord-html-transcripts');
 
@@ -8,119 +7,85 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBit
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+// --- THÈME BLANC & ORANGE ---
+const THEME = `
+    <style>
+        body { font-family: sans-serif; background: #ffffff; color: #333; margin: 0; }
+        .nav { background: #fff; padding: 20px; border-bottom: 3px solid #f97316; display: flex; justify-content: space-between; align-items: center; }
+        .btn-orange { background: #f97316; color: white; padding: 10px 20px; border-radius: 8px; text-decoration: none; font-weight: bold; }
+        .card { background: #fff; border: 2px solid #f97316; border-radius: 15px; padding: 25px; margin: 20px auto; max-width: 600px; }
+    </style>
+`;
 
 // --- CONFIGURATION ---
 const CONFIG_FILE = './config.json';
-function getConfig(guildId) {
-    if (!fs.existsSync(CONFIG_FILE)) return {};
-    const db = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    return db[guildId] || { support_roles: [], ticket_cat: '', ticket_msg: 'Bonjour, un staff va s\'occuper de vous.', banner_url: '' };
-}
-function saveConfig(guildId, newData) {
+const getConfig = (id) => (fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'))[id] || { embed_color: '#f97316' } : { embed_color: '#f97316' });
+const saveConfig = (id, data) => {
     let db = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {};
-    db[guildId] = { ...getConfig(guildId), ...newData };
+    db[id] = { ...db[id], ...data };
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(db, null, 2));
-}
+};
+
+// --- DASHBOARD ROUTES ---
+app.get('/', (req, res) => res.send(`${THEME}<body><div class="nav"><h1>LA CENTRALE</h1></div><div class="card"><h2>Dashboard Pro</h2><p>Gérez vos tickets en toute simplicité.</p></div></body>`));
 
 // --- BOT LOGIC ---
-client.once('ready', async () => {
-    console.log(`✅ Bot en ligne : ${client.user.tag}`);
-    const commands = [
-        { name: 'setup-wizard', description: 'Configure rôles et catégorie' },
-        { name: 'setup-panel', description: 'Envoie le menu de ticket public' }
-    ];
-    await new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN).put(Routes.applicationCommands('1531412187392901120'), { body: commands });
-});
-
-client.on('interactionCreate', async (interaction) => {
+client.on('interactionCreate', async (i) => {
     try {
-        // --- 1. SETUP WIZARD ---
-        if (interaction.isChatInputCommand() && interaction.commandName === 'setup-wizard') {
-            await interaction.deferReply({ ephemeral: true });
-            const row = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('setup_roles').setPlaceholder('Choisis les rôles staff').setMinValues(1).setMaxValues(5));
-            const row2 = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('setup_cat').setPlaceholder('Choisis la catégorie').setChannelTypes(ChannelType.GuildCategory));
-            await interaction.editReply({ content: 'Sélectionne les paramètres :', components: [row, row2] });
+        // 1. SETUP WIZARD (Wizard + Couleur)
+        if (i.isChatInputCommand() && i.commandName === 'setup-wizard') {
+            await i.deferReply({ ephemeral: true });
+            const row = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('setup_roles').setPlaceholder('Choisis les rôles').setMinValues(1).setMaxValues(5));
+            const row2 = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('setup_cat').setPlaceholder('Catégorie').setChannelTypes(ChannelType.GuildCategory));
+            await i.editReply({ components: [row, row2] });
         }
 
-        // --- 2. SETUP PANEL (LONG TEXT & COULEUR) ---
-        if (interaction.isChatInputCommand() && interaction.commandName === 'setup-panel') {
-            await interaction.deferReply({ ephemeral: false }); // Public pour tout le monde
-            
-            const maCouleur = '#f97316'; // <--- CHANGE LA COULEUR ICI (Hex code)
-            
-            const embed = new EmbedBuilder()
-                .setTitle('1. LA CENTRALE')
-                .setColor(maCouleur)
-                .setDescription(`
-2. **Bienvenue au Centre de Support.**
-3. Ce système est mis en place pour vous aider efficacement.
-4. Avant d'ouvrir un ticket, merci de lire les consignes suivantes :
-5. **Politesse :** Tout comportement irrespectueux sera sanctionné.
-6. **Patience :** Un membre du staff vous répondra dès que possible.
-7. **Clarté :** Expliquez votre problème avec précision.
-8. **Sécurité :** Ne donnez jamais vos mots de passe.
-9. **Respect :** Restez courtois en toute circonstance.
-10. **Motifs disponibles :** Staff, Partenariat, Question, Signalement, Urgent.
-11. **Abus :** L'ouverture de tickets inutiles est interdite.
-12. **Spam :** Ne mentionnez pas le staff inutilement.
-13. **Règles :** Le règlement du serveur s'applique ici aussi.
-14. **Collaboration :** Travaillez avec nous pour résoudre les problèmes.
-15. **Transparence :** Soyez honnête dans vos signalements.
-16. **Langage :** Utilisez un langage correct et lisible.
-17. **Preuves :** Si vous signalez quelqu'un, joignez des screens.
-18. **Réactivité :** Répondez aux questions du staff rapidement.
-19. **Non-toxique :** Aucun comportement toxique ne sera toléré.
-20. **Support :** Nous sommes là pour améliorer votre expérience.
-21. **Discrétion :** Le contenu de vos tickets est privé.
-22. **Professionnalisme :** Nous attendons une attitude mature.
-23. **Collaboration :** Merci de votre coopération précieuse.
-24. **Entraide :** Aidez-nous à garder un serveur propre.
-25. **Modération :** Le staff a toujours le dernier mot.
-26. **Sanctions :** Le non-respect entraîne une fermeture du ticket.
-27. **Fermeture :** Utilisez le bouton prévu pour fermer.
-28. **Archive :** Un transcript sera envoyé après fermeture.
-29. **Qualité :** Nous visons la qualité avant tout.
-30. **Accueil :** Merci de respecter le staff dès l'arrivée.
-31. **Confiance :** Nous construisons une relation de confiance.
-32. **Objectif :** Résoudre vos soucis dans le calme.
-33. **Merci de respecter les règles !**
-                `);
+        if (i.isRoleSelectMenu() || i.isChannelSelectMenu()) {
+            if (i.customId === 'setup_roles') saveConfig(i.guild.id, { support_roles: i.values });
+            if (i.customId === 'setup_cat') saveConfig(i.guild.id, { ticket_cat: i.values[0] });
+            const modal = new ModalBuilder().setCustomId('color_modal').setTitle('Configuration Couleur');
+            modal.addComponents(new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId('color').setLabel('Code couleur (ex: #f97316)').setStyle(TextInputStyle.Short)));
+            await i.showModal(modal);
+        }
 
-            const menu = new StringSelectMenuBuilder().setCustomId('ticket_select').setPlaceholder('Choisis ton motif').addOptions([
+        if (i.isModalSubmit() && i.customId === 'color_modal') {
+            saveConfig(i.guild.id, { embed_color: i.fields.getTextInputValue('color') });
+            await i.reply({ content: '✅ Sauvegardé !', ephemeral: true });
+        }
+
+        // 2. SETUP PANEL (Public)
+        if (i.isChatInputCommand() && i.commandName === 'setup-panel') {
+            await i.deferReply({ ephemeral: false });
+            const cfg = getConfig(i.guild.id);
+            const embed = new EmbedBuilder()
+                .setTitle('🎫 LA CENTRALE - SUPPORT')
+                .setDescription('Bienvenue. Merci de respecter le personnel. Choisissez un motif ci-dessous.')
+                .setColor(cfg.embed_color || '#f97316');
+            const menu = new StringSelectMenuBuilder().setCustomId('ticket_select').addOptions([
                 { label: '🔰 Staff', value: 'staff' }, { label: '🤝 Partenariat', value: 'partenariat' },
                 { label: '❓ Question', value: 'question' }, { label: '❗ Signalement', value: 'report' }, { label: '🚨 Urgent', value: 'urgent' }
             ]);
-            await interaction.editReply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
+            await i.editReply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
         }
 
-        // --- 3. LOGIQUE D'ENREGISTREMENT & TICKETS ---
-        if (interaction.isRoleSelectMenu() || interaction.isChannelSelectMenu()) {
-            await interaction.deferReply({ ephemeral: true });
-            if (interaction.customId === 'setup_roles') saveConfig(interaction.guild.id, { support_roles: interaction.values });
-            if (interaction.customId === 'setup_cat') saveConfig(interaction.guild.id, { ticket_cat: interaction.values[0] });
-            await interaction.editReply({ content: '✅ Configuration sauvegardée !' });
-        }
-
-        if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
-            await interaction.deferReply({ ephemeral: true });
-            const cfg = getConfig(interaction.guild.id);
-            const channel = await interaction.guild.channels.create({ name: `ticket-${interaction.values[0]}`, parent: cfg.ticket_cat || null });
+        // 3. TICKET OPEN/CLOSE
+        if (i.isStringSelectMenu() && i.customId === 'ticket_select') {
+            await i.deferReply({ ephemeral: true });
+            const channel = await i.guild.channels.create({ name: `ticket-${i.values[0]}`, parent: getConfig(i.guild.id).ticket_cat });
             const btn = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('close_btn').setLabel('🔒 Fermer').setStyle(ButtonStyle.Danger));
-            await channel.send({ content: `${interaction.user}`, embeds: [new EmbedBuilder().setTitle('🎫 Ticket').setDescription(cfg.ticket_msg)], components: [btn] });
-            await interaction.editReply({ content: `✅ Ticket ouvert : ${channel}` });
+            await channel.send({ content: `${i.user}`, components: [btn] });
+            await i.editReply({ content: `✅ Ticket : ${channel}` });
         }
 
-        if (interaction.isButton() && interaction.customId === 'close_btn') {
-            await interaction.deferReply();
-            const transcript = await discordTranscripts.createTranscript(interaction.channel);
-            try { await interaction.user.send({ files: [transcript] }); } catch (e) {}
-            await interaction.channel.delete();
+        if (i.isButton() && i.customId === 'close_btn') {
+            await i.deferReply();
+            const transcript = await discordTranscripts.createTranscript(i.channel);
+            try { await i.user.send({ files: [transcript] }); } catch (e) {}
+            await i.channel.delete();
         }
 
-    } catch (err) { console.error("Erreur critique :", err); }
+    } catch (e) { console.error(e); }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-app.listen(PORT, () => console.log(`Dashboard prêt sur port ${PORT}`));
+app.listen(PORT, () => console.log(`Bot et Dashboard prêts sur port ${PORT}`));
