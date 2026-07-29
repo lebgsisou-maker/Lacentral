@@ -48,14 +48,48 @@ client.on('interactionCreate', async (interaction) => {
                 const row2 = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('setup_cat').setPlaceholder('Choisis la catégorie').setChannelTypes(ChannelType.GuildCategory));
                 await interaction.editReply({ content: 'Sélectionne les paramètres :', components: [row, row2] });
             }
-            if (interaction.commandName === 'setup-panel') {
-                const menu = new StringSelectMenuBuilder().setCustomId('ticket_select').setPlaceholder('Choisis un motif').addOptions([
-                    { label: '🔰 Staff', value: 'staff' }, { label: '🤝 Partenariat', value: 'partenariat' },
-                    { label: '❓ Question', value: 'question' }, { label: '❗ Signalement', value: 'report' }, { label: '🚨 Urgent', value: 'urgent' }
-                ]);
-                await interaction.editReply({ embeds: [new EmbedBuilder().setTitle('🎫 SUPPORT').setColor('#f97316')], components: [new ActionRowBuilder().addComponents(menu)] });
-            }
-        }
+  if (interaction.commandName === 'setup-panel') {
+    // 1. Définis ta couleur ici (tu peux changer le code hexadécimal)
+    // Quelques idées : '#f97316' (Orange), '#3b82f6' (Bleu), '#ef4444' (Rouge)
+    const maCouleur = '#f97316'; 
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎫 CENTRE DE SUPPORT - LA CENTRALE')
+        .setDescription(`
+            **Bienvenue dans le centre de support.** 
+            Merci de respecter le personnel et de faire preuve de patience. Toute demande inutile ou abusive pourra être sanctionnée. 
+            
+            Veuillez choisir le motif correspondant à votre demande pour être dirigé vers le salon approprié :
+
+            🔰 **Staff** : Pour toute assistance modération ou problème technique.
+            🤝 **Partenariat** : Pour proposer une collaboration avec notre serveur.
+            ❓ **Question** : Si vous avez une interrogation sur le fonctionnement.
+            ❗ **Signalement** : Pour rapporter un joueur ou un comportement inapproprié.
+            🚨 **Urgent** : Passage prioritaire (À n'utiliser qu'en cas d'urgence réelle).
+        `)
+        .setColor(maCouleur) // C'est ici que tu gères la couleur !
+        .setFooter({ text: 'La Centrale Sécurité - Protection & Support' })
+        .setTimestamp();
+
+    const menu = new StringSelectMenuBuilder()
+        .setCustomId('ticket_select')
+        .setPlaceholder('Choisissez un motif')
+        .addOptions([
+            { label: '🔰 Contacter le Staff', value: 'staff' },
+            { label: '🤝 Partenariat', value: 'partenariat' },
+            { label: '❓ Question', value: 'question' },
+            { label: '❗ Signalement', value: 'report' },
+            { label: '🚨 Passage Prioritaire', value: 'urgent' }
+        ]);
+
+    // ephemeral: false permet à tout le monde de voir le message !
+    await interaction.editReply({ 
+        embeds: [embed], 
+        components: [new ActionRowBuilder().addComponents(menu)],
+        ephemeral: false 
+    });
+      }
+            
 
         // --- 2. ENREGISTREMENT ---
         if (interaction.isRoleSelectMenu() || interaction.isChannelSelectMenu()) {
