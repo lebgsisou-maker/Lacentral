@@ -1,5 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, RoleSelectMenuBuilder, ChannelSelectMenuBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, PermissionsBitField, ChannelType } = require('discord.js');
 const fs = require('fs');
+const http = require('http'); // Ajout pour Render
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildMembers] });
 
@@ -22,14 +23,13 @@ const commands = [
 client.once('ready', async () => {
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('Bot en ligne !');
+    console.log('Bot en ligne et prêt !');
 });
 
 client.on('interactionCreate', async (i) => {
     try {
         const cfg = getConfig(i.guild.id);
 
-        // --- COMMANDES SLASH ---
         if (i.isChatInputCommand()) {
             if (i.commandName === 'setup-wizard') {
                 const row1 = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('setup_roles').setPlaceholder('Choisis les rôles Staff').setMinValues(1).setMaxValues(10));
@@ -53,7 +53,6 @@ client.on('interactionCreate', async (i) => {
                 await i.reply({ embeds: [embed], components: [new ActionRowBuilder().addComponents(menu)] });
             }
 
-            // Moderation simple
             if (i.member.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
                 if (i.commandName === 'ban') { await i.guild.members.ban(i.options.getUser('target')); await i.reply('🔨 Banni.'); }
                 if (i.commandName === 'kick') { await i.options.getMember('target').kick(); await i.reply('👢 Expulsé.'); }
@@ -61,7 +60,6 @@ client.on('interactionCreate', async (i) => {
             }
         }
 
-        // --- WIZARD LOGIC ---
         if (i.isRoleSelectMenu() || i.isChannelSelectMenu()) {
             if (i.customId === 'setup_roles') saveConfig(i.guild.id, { support_roles: i.values });
             if (i.customId === 'setup_cat') saveConfig(i.guild.id, { ticket_cat: i.values[0] });
@@ -75,7 +73,6 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ content: '✅ Configuration sauvegardée !', ephemeral: true });
         }
 
-        // --- TICKETS LOGIC ---
         if (i.isStringSelectMenu() && i.customId === 'ticket_select') {
             const channel = await i.guild.channels.create({
                 name: `ticket-${i.values[0]}`,
@@ -96,5 +93,7 @@ client.on('interactionCreate', async (i) => {
     } catch (e) { console.error(e); }
 });
 
+// Serveur HTTP pour Render
+http.createServer((req, res) => res.end('Bot actif')).listen(process.env.PORT || 10000);
+
 client.login(process.env.DISCORD_TOKEN);
-                            
