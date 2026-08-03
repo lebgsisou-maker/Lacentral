@@ -75,5 +75,6 @@ client.on('interactionCreate', async (i) => {
     }
 });
 
-// ... (le reste du code client.login)
+// Connexion du bot
+client.login(process.env.DISCORD_TOKEN);
         
