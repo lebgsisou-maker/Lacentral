@@ -21,8 +21,12 @@ const saveConfig = (id, data) => {
 const commands = [
     new SlashCommandBuilder().setName('config').setDescription('Configurer rôles et catégories'),
     new SlashCommandBuilder().setName('setup-panel').setDescription('Afficher le panel'),
-    new SlashCommandBuilder().setName('antiraid').setDescription('Activer/Désactiver Anti-Raid').addBooleanOption(o => o.setName('etat').setRequired(true)),
-    new SlashCommandBuilder().setName('antilien').setDescription('Activer/Désactiver Anti-Lien').addBooleanOption(o => o.setName('etat').setRequired(true))
+    new SlashCommandBuilder().setName('antiraid')
+        .setDescription('Activer/Désactiver Anti-Raid')
+        .addBooleanOption(o => o.setName('etat').setDescription('Activer ou désactiver la protection anti-raid').setRequired(true)),
+    new SlashCommandBuilder().setName('antilien')
+        .setDescription('Activer/Désactiver Anti-Lien')
+        .addBooleanOption(o => o.setName('etat').setDescription('Activer ou désactiver la protection anti-lien').setRequired(true))
 ];
 
 client.once('ready', async () => {
@@ -84,10 +88,11 @@ client.on('interactionCreate', async (i) => {
     }
 });
 
-// --- SERVEUR HTTP POUR RENDER (Anti-Mise en veille) ---
+// --- SERVEUR HTTP POUR RENDER ---
 http.createServer((req, res) => {
     res.end('Bot actif');
 }).listen(process.env.PORT || 10000, '0.0.0.0');
 
 // Connexion du bot
 client.login(process.env.DISCORD_TOKEN);
+                                    
