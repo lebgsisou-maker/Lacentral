@@ -25,6 +25,12 @@ const commands = [
     new SlashCommandBuilder().setName('antilien').setDescription('Activer/Désactiver Anti-Lien').addBooleanOption(o => o.setName('etat').setRequired(true))
 ];
 
+client.once('ready', async () => {
+    console.log('Bot prêt !');
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
+});
+
 client.on('interactionCreate', async (i) => {
     const cfg = getConfig(i.guild.id);
 
@@ -48,9 +54,13 @@ client.on('interactionCreate', async (i) => {
         }
     }
 
-    // --- LOGIQUE TICKETS ---
+    if (i.isRoleSelectMenu() || i.isChannelSelectMenu()) {
+        if (i.customId === 'setup_roles') saveConfig(i.guild.id, { support_roles: i.values });
+        if (i.customId === 'setup_cat') saveConfig(i.guild.id, { ticket_cat: i.values[0] });
+        await i.reply({ content: '✅ Configuration sauvegardée !', ephemeral: true });
+    }
+
     if (i.isStringSelectMenu() && i.customId === 'ticket_select') {
-        // Permission pour TOUS les rôles configurés
         const overwrites = [{ id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] }, { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel] }];
         cfg.support_roles.forEach(roleId => overwrites.push({ id: roleId, allow: [PermissionsBitField.Flags.ViewChannel] }));
 
@@ -66,7 +76,6 @@ client.on('interactionCreate', async (i) => {
         setTimeout(() => i.channel.delete(), 5000);
     }
     
-    // --- ANTI-LIEN (Simple) ---
     if (i.isMessageComponent() === false && i.content && cfg.anti_lien) {
         if (i.content.includes('http://') || i.content.includes('https://') || i.content.includes('discord.gg/')) {
             await i.delete();
@@ -75,6 +84,10 @@ client.on('interactionCreate', async (i) => {
     }
 });
 
+// --- SERVEUR HTTP POUR RENDER (Anti-Mise en veille) ---
+http.createServer((req, res) => {
+    res.end('Bot actif');
+}).listen(process.env.PORT || 10000, '0.0.0.0');
+
 // Connexion du bot
 client.login(process.env.DISCORD_TOKEN);
-        
