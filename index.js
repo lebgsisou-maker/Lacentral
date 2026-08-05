@@ -45,23 +45,40 @@ const addBlacklist = (guildId, userId) => {
 
 const joinTracker = new Map();
 
-// --- COMMANDES SLASH ---
+// --- COMMANDES SLASH OFFICIELLES ---
 const commands = [
-    new SlashCommandBuilder().setName('config').setDescription('Panel de configuration du bot'),
+    new SlashCommandBuilder()
+        .setName('config')
+        .setDescription('Panel de configuration du bot'),
     new SlashCommandBuilder()
         .setName('blacklist')
         .setDescription('Bannir et blacklister un utilisateur du serveur')
         .addUserOption(o => o.setName('utilisateur').setDescription('La personne à blacklister').setRequired(true))
         .addStringOption(o => o.setName('raison').setDescription('Raison du blacklist').setRequired(false)),
-    new SlashCommandBuilder().setName('antiraid').setDescription('Activer/Désactiver l\'anti-raid').addBooleanOption(o => o.setName('etat').setDescription('true/false').setRequired(true)),
-    new SlashCommandBuilder().setName('antilien').setDescription('Activer/Désactiver l\'anti-lien').addBooleanOption(o => o.setName('etat').setDescription('true/false').setRequired(true))
+    new SlashCommandBuilder()
+        .setName('antiraid')
+        .setDescription('Activer/Désactiver l\'anti-raid')
+        .addBooleanOption(o => o.setName('etat').setDescription('true ou false').setRequired(true)),
+    new SlashCommandBuilder()
+        .setName('antilien')
+        .setDescription('Activer/Désactiver l\'anti-lien')
+        .addBooleanOption(o => o.setName('etat').setDescription('true ou false').setRequired(true))
 ];
 
 client.once('ready', async () => {
     console.log(`[BOT] Connecté : ${client.user.tag}`);
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
-    await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
-    console.log('[COMMANDES] Enregistrées !');
+    
+    try {
+        console.log('[COMMANDES] Actualisation des commandes Slash...');
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands },
+        );
+        console.log('[COMMANDES] Enregistrées avec succès !');
+    } catch (error) {
+        console.error(error);
+    }
 });
 
 // --- GESTIONNAIRE D'INTERACTIONS ---
@@ -114,7 +131,7 @@ client.on('interactionCreate', async (i) => {
         const key = i.customId === 'toggle_lien' ? 'anti_lien' : 'anti_raid';
         const newState = !cfg[key];
         saveConfig(i.guild.id, { [key]: newState });
-        await i.update({ content: `✅ ${key} mis à jour : **${newState}** (Refaites /config)`, components: [] });
+        await i.update({ content: `✅ ${key} mis à jour : **${newState}** (Refais /config)`, components: [] });
     }
 
     if (i.isChannelSelectMenu() && i.customId === 'log_chan') {
@@ -123,13 +140,12 @@ client.on('interactionCreate', async (i) => {
     }
 });
 
-// --- PROTECTION CONTRE LA BLACKLIST ---
+// --- PROTECTION BLACKLIST & ANTI-BOT ---
 client.on('guildMemberAdd', async (member) => {
     const guildId = member.guild.id;
     const cfg = getConfig(guildId);
     const blacklist = getBlacklist(guildId);
 
-    // Vérification de la Blacklist globale du serveur
     if (blacklist.includes(member.id)) {
         try {
             await member.ban({ reason: 'Utilisateur présent dans la blacklist du serveur.' });
@@ -137,35 +153,31 @@ client.on('guildMemberAdd', async (member) => {
         } catch (e) {}
     }
 
-    // --- ANTI-BOT & ANTI-TRAÎTRE (Sécurité Lokia / Raid Bot) ---
     if (member.user.bot && cfg.anti_raid) {
         try {
-            // Récupérer les logs d'audit pour savoir QUI a invité ce bot sur le serveur
             const fetchedLogs = await member.guild.fetchAuditLogs({
                 limit: 1,
                 type: 28, // BOT_ADD
             });
             const botAddLog = fetchedLogs.entries.first();
             
-            // Bannir immédiatement le bot malveillant
-            await member.ban({ reason: 'Bot non autorisé détecté lors d\'une tentative potentielle de raid.' });
+            await member.ban({ reason: 'Bot non autorisé détecté.' });
 
             if (botAddLog) {
                 const { executor } = botAddLog;
-                // Si la personne qui a ajouté le bot n'est pas le propriétaire, on la bannit aussi instantanément pour trahison/raid !
                 if (executor.id !== member.guild.ownerId) {
-                    await member.guild.members.ban(executor.id, { reason: `A ajouté un bot non autorisé suspect (${member.user.tag}).` });
+                    await member.guild.members.ban(executor.id, { reason: `A invité un bot suspect (${member.user.tag}).` });
                     
                     if (cfg.log_channel) {
                         const logChan = member.guild.channels.cache.get(cfg.log_channel);
                         if (logChan) {
-                            logChan.send(`🚨 **CONTRE-ATTAQUE ANTI-RAID RÉUSSIE** !\nLe bot suspect **${member.user.tag}** et l'utilisateur **${executor.tag}** qui venait de l'inviter ont été **bannis instantanément** !`);
+                            logChan.send(`🚨 **CONTRE-ATTAQUE SÉCURITÉ** !\nLe bot **${member.user.tag}** et l'utilisateur **${executor.tag}** qui l'a invité ont été **bannis instantanément** !`);
                         }
                     }
                 }
             }
         } catch (e) {
-            console.error("Erreur lors de la sécurisation anti-bot :", e);
+            console.error("Erreur anti-bot :", e);
         }
     }
 });
@@ -196,3 +208,6 @@ client.on('messageCreate', async (message) => {
 http.createServer((req, res) => {
     res.end('Bot actif');
 }).listen(process.env.PORT || 10000, '0.0.0.0');
+
+client.login(process.env.DISCORD_TOKEN);
+    
