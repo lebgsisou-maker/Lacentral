@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, StringSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, StringSelectMenuBuilder, RoleSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const fs = require('fs');
 const http = require('http');
 
@@ -17,9 +17,37 @@ const BLACKLIST_FILE = './blacklist.json';
 
 // --- GESTION CONFIG & BLACKLIST ---
 const getConfig = (id) => {
-    if (!fs.existsSync(CONFIG_FILE)) return { embed_color: '#f97316', log_channel: null, anti_lien: true, anti_raid: true };
+    if (!fs.existsSync(CONFIG_FILE)) return { 
+        embed_color: '#f97316', 
+        log_channel: null, 
+        anti_lien: true, 
+        anti_raid: true,
+        ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe du Comité d'Ordre Éthique te répond en privé — vite et en toute confidentialité.",
+        ticket_roles: [],
+        ticket_options: [
+            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '❓' },
+            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '🐛' },
+            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
+            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '📋' },
+            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '⭐' }
+        ]
+    };
     const db = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    return db[id] || { embed_color: '#f97316', log_channel: null, anti_lien: true, anti_raid: true };
+    return db[id] || { 
+        embed_color: '#f97316', 
+        log_channel: null, 
+        anti_lien: true, 
+        anti_raid: true,
+        ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe du Comité d'Ordre Éthique te répond en privé — vite et en toute confidentialité.",
+        ticket_roles: [],
+        ticket_options: [
+            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '❓' },
+            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '🐛' },
+            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
+            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '📋' },
+            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '⭐' }
+        ]
+    };
 };
 
 const saveConfig = (id, data) => {
@@ -63,7 +91,19 @@ const commands = [
         .addBooleanOption(o => o.setName('etat').setDescription('true ou false').setRequired(true)),
     new SlashCommandBuilder()
         .setName('ticket-setup')
-        .setDescription('Envoyer le panneau de tickets Nexora-style dans le salon')
+        .setDescription('Envoyer le panneau de tickets Comité d\'Ordre Éthique')
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('set-ticket-desc')
+        .setDescription('Modifier la description du panneau de tickets')
+        .addStringOption(o => o.setName('description').setDescription('Le nouveau texte de description').setRequired(true))
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('ticket-add-option')
+        .setDescription('Ajouter une option personnalisée au menu des tickets')
+        .addStringOption(o => o.setName('titre').setDescription('Nom de l\'option (ex: Lumière, Support, etc.)').setRequired(true))
+        .addStringOption(o => o.setName('description').setDescription('Petite description de l\'option').setRequired(true))
+        .addStringOption(o => o.setName('emoji').setDescription('Un émoji (ex: 💡)').setRequired(true))
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 ];
 
@@ -93,17 +133,22 @@ client.on('interactionCreate', async (i) => {
         if (i.commandName === 'config') {
             const embed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
-                .setTitle('🛡️ Panel de Sécurité - CDE')
+                .setTitle('🛡️ Panel de Configuration — Comité d\'Ordre Éthique (CDE)')
+                .setDescription("Gère ici la sécurité, les modules, la couleur et les rôles d'accès aux tickets.")
                 .addFields(
-                    { name: '🔒 Anti-Lien / IP Logger', value: cfg.anti_lien ? '✅ Activé' : '❌ Désactivé', inline: true },
-                    { name: '🚨 Anti-Raid & Anti-Bot Intelligent', value: cfg.anti_raid ? '✅ Activé' : '❌ Désactivé', inline: true }
+                    { name: '🔒 Anti-Lien', value: cfg.anti_lien ? '✅ Activé' : '❌ Désactivé', inline: true },
+                    { name: '🚨 Anti-Raid', value: cfg.anti_raid ? '✅ Activé' : '❌ Désactivé', inline: true },
+                    { name: '🎟️ Rôles Staff Tickets', value: cfg.ticket_roles && cfg.ticket_roles.length > 0 ? cfg.ticket_roles.map(r => `<@&${r}>`).join(', ') : 'Aucun rôle configuré', inline: false }
                 );
+
             const rowBtn = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('toggle_lien').setStyle(cfg.anti_lien ? ButtonStyle.Danger : ButtonStyle.Success).setLabel('Anti-Lien'),
                 new ButtonBuilder().setCustomId('toggle_raid').setStyle(cfg.anti_raid ? ButtonStyle.Danger : ButtonStyle.Success).setLabel('Anti-Raid')
             );
-            const rowChan = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('log_chan').setChannelTypes(ChannelType.GuildText).setPlaceholder('Salon des logs CDE'));
-            await i.reply({ embeds: [embed], components: [rowBtn, rowChan], ephemeral: true });
+            const rowChan = new ActionRowBuilder().addComponents(new ChannelSelectMenuBuilder().setCustomId('log_chan').setChannelTypes(ChannelType.GuildText).setPlaceholder('Sélectionner le salon des logs CDE'));
+            const rowRoles = new ActionRowBuilder().addComponents(new RoleSelectMenuBuilder().setCustomId('ticket_roles_select').setMinValues(1).setMaxValues(5).setPlaceholder('Sélectionner les rôles staff pour les tickets'));
+
+            await i.reply({ embeds: [embed], components: [rowBtn, rowChan, rowRoles], ephemeral: true });
         }
 
         if (i.commandName === 'blacklist') {
@@ -128,37 +173,49 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ content: `✅ ${key} réglé sur **${etat}**`, ephemeral: true });
         }
 
-        if (i.commandName === 'ticket-setup') {
-            const embed = new EmbedBuilder()
-                .setColor('#f97316')
-                .setTitle('SUPPORT — CDE')
-                .setDescription("Une question, un souci ou une demande ?\nNotre équipe te répond en privé — vite et en toute confidentialité.")
-                .setImage('https://i.imgur.com/your-banner-url.png') // Remplace par ton lien de bannière si besoin
-                .setThumbnail(client.user.displayAvatarURL())
-                .addFields(
-                    { name: '❓ Question générale', value: 'Une question sur le serveur CDE ou autres ?', inline: false },
-                    { name: '🐛 Bug / Problème technique', value: 'Signaler un bug ou un souci', inline: false },
-                    { name: '🤝 Partenariat & collab', value: 'Proposer un partenariat', inline: false },
-                    { name: '📋 Autre', value: 'Toute autre demande', inline: false },
-                    { name: '⭐ Recrutement Staff', value: 'Salon des recrutements staff CDE', inline: false }
-                )
-                .setFooter({ text: 'Réponse en privé • Confidentiel • Prise en charge rapide • Propulsé par CDE Bot' });
+        if (i.commandName === 'set-ticket-desc') {
+            if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
+            const newDesc = i.options.getString('description');
+            saveConfig(i.guild.id, { ticket_desc: newDesc });
+            await i.reply({ content: `✅ La description des tickets a été mise à jour avec succès !\n> ${newDesc}`, ephemeral: true });
+        }
 
-            const row = new ActionRowBuilder().addComponents(
-                new StringSelectMenuBuilder()
-                    .setCustomId('ticket_select')
-                    .setPlaceholder('// Sélectionne une catégorie')
-                    .addOptions([
-                        { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '❓' },
-                        { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '🐛' },
-                        { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
-                        { label: 'Autre', description: 'Toute autre demande', value: 'ticket_autre', emoji: '📋' },
-                        { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '⭐' }
-                    ])
-            );
+        if (i.commandName === 'ticket-add-option') {
+            if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
+            const title = i.options.getString('titre');
+            const desc = i.options.getString('description');
+            const emoji = i.options.getString('emoji');
+            const valueKey = `ticket_${Date.now()}`;
+
+            let options = cfg.ticket_options || [];
+            options.push({ label: title, description: desc, value: valueKey, emoji: emoji });
+            saveConfig(i.guild.id, { ticket_options: options });
+
+            await i.reply({ content: `✅ Nouvelle option **"${title}"** ajoutée au menu des tickets avec succès !`, ephemeral: true });
+        }
+
+        if (i.commandName === 'ticket-setup') {
+            const optionsList = (cfg.ticket_options || []).map(opt => `${opt.emoji} **${opt.label}** · ${opt.description}`).join('\n');
+
+            const embed = new EmbedBuilder()
+                .setColor(cfg.embed_color)
+                .setTitle('⚖️ COMITÉ D\'ORDRE ÉTHIQUE — SUPPORT')
+                .setDescription(`${cfg.ticket_desc}\n\n📁 **Choisis le motif de ta demande**\n${optionsList}`)
+                .setThumbnail(client.user.displayAvatarURL())
+                .setFooter({ text: '✉️ Réponse en privé • 🔒 Confidentiel • ⚡ Prise en charge rapide • Propulsé par CDE' });
+
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('ticket_select')
+                .setPlaceholder('// Sélectionne une catégorie');
+
+            (cfg.ticket_options || []).forEach(opt => {
+                selectMenu.addOptions({ label: opt.label, description: opt.description, value: opt.value, emoji: opt.emoji });
+            });
+
+            const row = new ActionRowBuilder().addComponents(selectMenu);
 
             await i.channel.send({ embeds: [embed], components: [row] });
-            await i.reply({ content: '✅ Panneau de tickets déployé avec succès !', ephemeral: true });
+            await i.reply({ content: '✅ Panneau de tickets CDE déployé avec succès !', ephemeral: true });
         }
     }
 
@@ -171,31 +228,42 @@ client.on('interactionCreate', async (i) => {
         await i.update({ content: `✅ ${key} mis à jour : **${newState}** (Refais /config)`, components: [] });
     }
 
-    // Menu Déroulant des Tickets
+    // Sélection des rôles staff pour les tickets
+    if (i.isRoleSelectMenu() && i.customId === 'ticket_roles_select') {
+        saveConfig(i.guild.id, { ticket_roles: i.values });
+        await i.reply({ content: `✅ Les rôles staff pour les tickets ont été mis à jour avec succès !`, ephemeral: true });
+    }
+
+    // Menu Déroulant des Tickets Dynamique
     if (i.isStringSelectMenu() && i.customId === 'ticket_select') {
-        const categoryMap = {
-            'ticket_general': 'Question Générale',
-            'ticket_bug': 'Bug / Technique',
-            'ticket_partenariat': 'Partenariat',
-            'ticket_autre': 'Autre',
-            'ticket_staff': 'Recrutement Staff'
-        };
-        const ticketType = categoryMap[i.values[0]] || 'Support';
+        const selectedOpt = (cfg.ticket_options || []).find(o => o.value === i.values[0]);
+        const ticketType = selectedOpt ? selectedOpt.label : 'Support';
+
+        let overwrites = [
+            { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
+            { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
+            { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels] }
+        ];
+
+        if (cfg.ticket_roles && cfg.ticket_roles.length > 0) {
+            cfg.ticket_roles.forEach(roleId => {
+                overwrites.push({
+                    id: roleId,
+                    allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory]
+                });
+            });
+        }
 
         const channel = await i.guild.channels.create({
             name: `ticket-${i.user.username}`,
             type: ChannelType.GuildText,
-            permissionOverwrites: [
-                { id: i.guild.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: i.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] },
-                { id: client.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ManageChannels] }
-            ]
+            permissionOverwrites: overwrites
         });
 
         const ticketEmbed = new EmbedBuilder()
-            .setColor('#f97316')
-            .setTitle(`🎫 Ticket : ${ticketType}`)
-            .setDescription(`Bienvenue ${i.user},\nUn membre de l'équipe CDE va bientôt te prendre en charge.\n\nExplique ton problème en détail ci-dessous.`)
+            .setColor(cfg.embed_color)
+            .setTitle(`⚖️ Ticket CDE : ${ticketType}`)
+            .setDescription(`Bienvenue ${i.user},\nUn membre du **Comité d'Ordre Éthique** va bientôt te prendre en charge.\n\nExplique ton problème ou ta demande en détail ci-dessous.`)
             .setThumbnail(i.user.displayAvatarURL());
 
         const ticketButtons = new ActionRowBuilder().addComponents(
@@ -203,7 +271,7 @@ client.on('interactionCreate', async (i) => {
             new ButtonBuilder().setCustomId('close_transcript_ticket').setStyle(ButtonStyle.Secondary).setLabel('Fermer + Transcript').setEmoji('📄')
         );
 
-        await channel.send({ content: `<@${i.user.id}>`, embeds: [ticketEmbed], components: [ticketButtons] });
+        await channel.send({ content: `<@${i.user.id}> ${cfg.ticket_roles ? cfg.ticket_roles.map(r => `<@&${r}>`).join(' ') : ''}`, embeds: [ticketEmbed], components: [ticketButtons] });
         await i.reply({ content: `✅ Ton ticket a été créé ici : ${channel}`, ephemeral: true });
     }
 
@@ -217,10 +285,9 @@ client.on('interactionCreate', async (i) => {
                 const transcript = messages.reverse().map(m => `[${new Date(m.createdTimestamp).toLocaleString()}] ${m.author.tag}: ${m.content}`).join('\n');
                 
                 const buffer = Buffer.from(transcript, 'utf-8');
-                // Trouve l'auteur du ticket (le premier membre non-bot qui a écrit ou via le nom)
                 await i.user.send({
-                    content: `📄 Voici le transcript de ton ticket sur **${i.guild.name}** :`,
-                    files: [{ attachment: buffer, name: `transcript-${i.channel.name}.txt` }]
+                    content: `📄 Voici le transcript de ton ticket sur le serveur **${i.guild.name}** (Comité d'Ordre Éthique) :`,
+                    files: [{ attachment: buffer, name: `transcript-cde-${i.channel.name}.txt` }]
                 }).catch(() => {});
             } catch (e) {
                 console.error("Erreur lors de l'envoi du transcript :", e);
@@ -251,7 +318,6 @@ client.on('guildMemberAdd', async (member) => {
         } catch (e) {}
     }
 
-    // Anti-bot intelligent (Vérifie si le bot est suspect ou s'il débarque sans validation d'un admin)
     if (member.user.bot && cfg.anti_raid) {
         try {
             const fetchedLogs = await member.guild.fetchAuditLogs({
@@ -261,10 +327,7 @@ client.on('guildMemberAdd', async (member) => {
             const botAddLog = fetchedLogs.entries.first();
             
             let isSuspicious = false;
-            // Si le bot possède un tag/nom ou un comportement louche, ou s'il n'a pas été ajouté par le propriétaire/admin principal
             if (botAddLog) {
-                const { executor } = botAddLog;
-                // Si l'inviteur n'est pas admin ou si le compte du bot est très récent / suspect
                 const accountAgeDays = (Date.now() - member.user.createdTimestamp) / (1000 * 60 * 60 * 24);
                 if (accountAgeDays < 2) {
                     isSuspicious = true;
@@ -288,7 +351,7 @@ client.on('messageCreate', async (message) => {
     if (!message.guild || message.author.bot) return;
     const cfg = getConfig(message.guild.id);
 
-    if (cfg.anti_lien) {
+    if (cfg.antilien) {
         const content = message.content.toLowerCase();
         const suspiciousPatterns = [
             'grabify.link', 'ipify.org', 'iplogger.', '2st.to', 'yip.su', 'blasze.com',
@@ -311,4 +374,4 @@ http.createServer((req, res) => {
 }).listen(process.env.PORT || 10000, '0.0.0.0');
 
 client.login(process.env.DISCORD_TOKEN)
-                                           
+        
