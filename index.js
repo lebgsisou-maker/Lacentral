@@ -20,11 +20,11 @@ const getConfig = (id) => {
         ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe te répond en privé — vite et en toute confidentialité.",
         ticket_roles: [],
         ticket_options: [
-            { label: 'Question générale', description: 'Une question sur le serveur ou autres ?', value: 'ticket_general', emoji: '<:cdesupport:1538273039609765918>' },
-            { label: 'Bug / Problème technique', description: 'Signaler un bug ou un souci', value: 'ticket_bug', emoji: '<:cdeconfidialit:1538272990461042891>' },
-            { label: 'Partenariat & collab', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '<:cdemail:1538272955350519920>' },
-            { label: 'Autre', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '<:cdedossier:1538273514295918612>' },
-            { label: 'Recrutement Staff', description: 'Salon des recrutements staff', value: 'ticket_staff', emoji: '<:cdehorloge:1538273017782861834>' }
+            { label: "Contacter L'équipe Du Staff", description: 'Besoin de joindre le staff ?', value: 'ticket_staff_contact', emoji: '🔰' },
+            { label: 'Partenariat & Collab', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
+            { label: 'Problème Technique', description: 'Signaler un bug technique', value: 'ticket_technique', emoji: '🛠️' },
+            { label: 'Signalement', description: 'Signaler un membre ou un problème', value: 'ticket_signalement', emoji: '🚨' },
+            { label: 'Autre-Demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '❓' }
         ]
     };
     const db = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -85,7 +85,6 @@ client.on('interactionCreate', async (i) => {
         if (i.commandName === 'ticket-setup') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
 
-            // Affichage propre sans les barres verticales encombrantes
             const optionsList = (cfg.ticket_options || []).map(opt => `${opt.emoji} **${opt.label}** · ${opt.description}`).join('\n');
 
             const embed = new EmbedBuilder()
@@ -148,7 +147,19 @@ client.on('interactionCreate', async (i) => {
         );
 
         await channel.send({ content: `<@${i.user.id}> ${cfg.ticket_roles ? cfg.ticket_roles.map(r => `<@&${r}>`).join(' ') : ''}`, embeds: [ticketEmbed], components: [ticketButtons] });
-        await i.reply({ content: `✅ Ton ticket a été créé ici : ${channel}`, ephemeral: true });
+        
+        // CORRECTION ICI : On met à jour le message pour réinitialiser le menu déroulant (en lui renvoyant ses composants)
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('ticket_select')
+            .setPlaceholder('// Sélectionne une catégorie');
+        (cfg.ticket_options || []).forEach(opt => {
+            selectMenu.addOptions({ label: opt.label, description: opt.description, value: opt.value, emoji: opt.emoji });
+        });
+        const row = new ActionRowBuilder().addComponents(selectMenu);
+        await i.update({ components: [row] }).catch(() => {});
+
+        // On envoie un message éphémère pour confirmer la création du ticket
+        await i.followUp({ content: `✅ Ton ticket a été créé ici : ${channel}`, ephemeral: true });
     }
 
     if (i.isButton() && (i.customId === 'close_ticket' || i.customId === 'close_transcript_ticket')) {
@@ -170,3 +181,4 @@ client.on('interactionCreate', async (i) => {
 
 http.createServer((req, res) => res.end('Bot CDE actif')).listen(process.env.PORT || 10000, '0.0.0.0');
 client.login(process.env.DISCORD_TOKEN);
+                                     
