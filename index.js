@@ -1,4 +1,4 @@
-const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, ChannelSelectMenuBuilder, StringSelectMenuBuilder, RoleSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, RoleSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const fs = require('fs');
 const http = require('http');
 
@@ -7,13 +7,11 @@ const client = new Client({
         GatewayIntentBits.Guilds, 
         GatewayIntentBits.GuildMessages, 
         GatewayIntentBits.MessageContent, 
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.AutoModerationExecution
+        GatewayIntentBits.GuildMembers
     ] 
 });
 
 const CONFIG_FILE = './config.json';
-const BLACKLIST_FILE = './blacklist.json';
 
 const getConfig = (id) => {
     if (!fs.existsSync(CONFIG_FILE)) return { 
@@ -22,11 +20,11 @@ const getConfig = (id) => {
         ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe te répond en privé — vite et en toute confidentialité.",
         ticket_roles: [],
         ticket_options: [
-            { label: 'Question générale', description: 'Une question sur le serveur ou autres ?', value: 'ticket_general', emoji: '<\:cdetiquette:1538244268865364058>' },
-            { label: 'Bug / Problème technique', description: 'Signaler un bug ou un souci', value: 'ticket_bug', emoji: '<\:cdesecurity:1538244159557865513>' },
-            { label: 'Partenariat & collab', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '<\:cdemail:1538243884549677157>' },
-            { label: 'Autre', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '<\:cdediscord:1538243969539113121>' },
-            { label: 'Recrutement Staff', description: 'Salon des recrutements staff', value: 'ticket_staff', emoji: '<\:cdedossier:1538244218047307948>' }
+            { label: 'Question générale', description: 'Une question sur le serveur ou autres ?', value: 'ticket_general', emoji: '❓' },
+            { label: 'Bug / Problème technique', description: 'Signaler un bug ou un souci', value: 'ticket_bug', emoji: '👾' },
+            { label: 'Partenariat & collab', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
+            { label: 'Autre', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '📋' },
+            { label: 'Recrutement Staff', description: 'Salon des recrutements staff', value: 'ticket_staff', emoji: '📄' }
         ]
     };
     const db = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -87,13 +85,15 @@ client.on('interactionCreate', async (i) => {
         if (i.commandName === 'ticket-setup') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
 
+            // Les options affichent des émojis normaux
             const optionsList = (cfg.ticket_options || []).map(opt => `${opt.emoji} **${opt.label}** · ${opt.description}`).join('\n');
 
+            // Émoji personnalisé sur la ligne du titre "Support — Ouvrir un ticket"
             const embed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
                 .setImage(cfg.ticket_banner)
                 .setTitle('SUPPORT')
-                .setDescription(`### 🏷️ Support — Ouvrir un ticket\n${cfg.ticket_desc}\n\n📁 **Choisis le motif de ta demande**\n${optionsList}\n\n📩 Réponse en privé • 🔒 Confidentiel • ⏱️ Prise en charge rapide\nPropulsé par CDE`);
+                .setDescription(`### <:cdetiquette:1538244268865364058> Support — Ouvrir un ticket\n${cfg.ticket_desc}\n\n📁 **Choisis le motif de ta demande**\n${optionsList}\n\n📩 Réponse en privé • 🔒 Confidentiel • ⏱️ Prise en charge rapide\nPropulsé par CDE`);
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_select')
@@ -171,4 +171,3 @@ client.on('interactionCreate', async (i) => {
 
 http.createServer((req, res) => res.end('Bot CDE actif')).listen(process.env.PORT || 10000, '0.0.0.0');
 client.login(process.env.DISCORD_TOKEN);
-                
