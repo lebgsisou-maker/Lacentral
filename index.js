@@ -22,14 +22,15 @@ const getConfig = (id) => {
         log_channel: null, 
         anti_lien: true, 
         anti_raid: true,
+        ticket_banner: 'https://i.imgur.com/3Z612u9.png', // Bannière par défaut modifiable
         ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe du Comité d'Ordre Éthique te répond en privé — vite et en toute confidentialité.",
         ticket_roles: [],
         ticket_options: [
-            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '❓' },
-            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '🐛' },
-            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
-            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '📋' },
-            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '⭐' }
+            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '<:cdetiquette:1538244268865364058>' },
+            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '<:cdesecurity:1538244159557865513>' },
+            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '<:cdemail:1538243884549677157>' },
+            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '<:cdediscord:1538243969539113121>' },
+            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '<:cdedossier:1538244218047307948>' }
         ]
     };
     const db = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
@@ -38,14 +39,15 @@ const getConfig = (id) => {
         log_channel: null, 
         anti_lien: true, 
         anti_raid: true,
+        ticket_banner: 'https://i.imgur.com/3Z612u9.png',
         ticket_desc: "Une question, un souci ou une demande ?\nNotre équipe du Comité d'Ordre Éthique te répond en privé — vite et en toute confidentialité.",
         ticket_roles: [],
         ticket_options: [
-            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '❓' },
-            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '🐛' },
-            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '🤝' },
-            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '📋' },
-            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '⭐' }
+            { label: 'Question générale', description: 'Une question sur le serveur', value: 'ticket_general', emoji: '<:cdetiquette:1538244268865364058>' },
+            { label: 'Bug / Technique', description: 'Signaler un bug', value: 'ticket_bug', emoji: '<:cdesecurity:1538244159557865513>' },
+            { label: 'Partenariat', description: 'Proposer un partenariat', value: 'ticket_partenariat', emoji: '<:cdemail:1538243884549677157>' },
+            { label: 'Autre demande', description: 'Toute autre réclamation', value: 'ticket_autre', emoji: '<:cdediscord:1538243969539113121>' },
+            { label: 'Recrutement Staff', description: 'Rejoindre le staff CDE', value: 'ticket_staff', emoji: '<:cdedossier:1538244218047307948>' }
         ]
     };
 };
@@ -99,11 +101,21 @@ const commands = [
         .addStringOption(o => o.setName('description').setDescription('Le nouveau texte de description').setRequired(true))
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
     new SlashCommandBuilder()
+        .setName('set-ticket-banner')
+        .setDescription('Modifier l\'image de bannière tout en haut du panneau de tickets')
+        .addStringOption(o => o.setName('url').setDescription('Lien direct de l\'image (URL)').setRequired(true))
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
+        .setName('set-color')
+        .setDescription('Changer la couleur des embeds du bot (ex: #5865F2, vert, violet...)')
+        .addStringOption(o => o.setName('couleur').setDescription('Code hexadécimal (ex: #9b59b6 ou #2ecc71)').setRequired(true))
+        .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator),
+    new SlashCommandBuilder()
         .setName('ticket-add-option')
         .setDescription('Ajouter une option personnalisée au menu des tickets')
-        .addStringOption(o => o.setName('titre').setDescription('Nom de l\'option (ex: Lumière, Support, etc.)').setRequired(true))
-        .addStringOption(o => o.setName('description').setDescription('Petite description de l\'option').setRequired(true))
-        .addStringOption(o => o.setName('emoji').setDescription('Un émoji (ex: 💡)').setRequired(true))
+        .addStringOption(o => o.setName('titre').setDescription('Nom de l\'option').setRequired(true))
+        .addStringOption(o => o.setName('description').setDescription('Petite description').setRequired(true))
+        .addStringOption(o => o.setName('emoji').setDescription('ID ou émoji personnalisé (ex: <:cdesupport:1538244109196595251>)').setRequired(true))
         .setDefaultMemberPermissions(PermissionsBitField.Flags.Administrator)
 ];
 
@@ -138,6 +150,7 @@ client.on('interactionCreate', async (i) => {
                 .addFields(
                     { name: '🔒 Anti-Lien', value: cfg.anti_lien ? '✅ Activé' : '❌ Désactivé', inline: true },
                     { name: '🚨 Anti-Raid', value: cfg.anti_raid ? '✅ Activé' : '❌ Désactivé', inline: true },
+                    { name: '🎨 Couleur Actuelle', value: `\`${cfg.embed_color}\``, inline: true },
                     { name: '🎟️ Rôles Staff Tickets', value: cfg.ticket_roles && cfg.ticket_roles.length > 0 ? cfg.ticket_roles.map(r => `<@&${r}>`).join(', ') : 'Aucun rôle configuré', inline: false }
                 );
 
@@ -180,6 +193,20 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ content: `✅ La description des tickets a été mise à jour avec succès !\n> ${newDesc}`, ephemeral: true });
         }
 
+        if (i.commandName === 'set-ticket-banner') {
+            if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
+            const url = i.options.getString('url');
+            saveConfig(i.guild.id, { ticket_banner: url });
+            await i.reply({ content: `✅ La bannière du panneau de tickets a été mise à jour avec succès !`, ephemeral: true });
+        }
+
+        if (i.commandName === 'set-color') {
+            if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
+            const color = i.options.getString('couleur');
+            saveConfig(i.guild.id, { embed_color: color });
+            await i.reply({ content: `✅ Couleur du bot mise à jour avec succès sur **${color}** !`, ephemeral: true });
+        }
+
         if (i.commandName === 'ticket-add-option') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
             const title = i.options.getString('titre');
@@ -200,9 +227,10 @@ client.on('interactionCreate', async (i) => {
             const embed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
                 .setTitle('⚖️ COMITÉ D\'ORDRE ÉTHIQUE — SUPPORT')
-                .setDescription(`${cfg.ticket_desc}\n\n📁 **Choisis le motif de ta demande**\n${optionsList}`)
+                .setDescription(`${cfg.ticket_desc}\n\n<:cdedossier:1538244218047307948> **Choisis le motif de ta demande**\n${optionsList}`)
+                .setImage(cfg.ticket_banner) // Image/Bannière tout en haut
                 .setThumbnail(client.user.displayAvatarURL())
-                .setFooter({ text: '✉️ Réponse en privé • 🔒 Confidentiel • ⚡ Prise en charge rapide • Propulsé par CDE' });
+                .setFooter({ text: '<:cdemail:1538243884549677157> Réponse en privé • <:cdesecurity:1538244159557865513> Confidentiel • <:cdehorloge:1538244050157703239> Prise en charge rapide • Propulsé par CDE' });
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_select')
@@ -332,46 +360,4 @@ client.on('guildMemberAdd', async (member) => {
                 if (accountAgeDays < 2) {
                     isSuspicious = true;
                 }
-            }
-
-            if (isSuspicious) {
-                await member.ban({ reason: 'Bot suspect détecté et bloqué par l\'anti-raid intelligent CDE.' });
-                if (botAddLog && botAddLog.executor) {
-                    await member.guild.members.ban(botAddLog.executor.id, { reason: `A invité un bot suspect non vérifié (${member.user.tag}).` });
-                }
-            }
-        } catch (e) {
-            console.error("Erreur anti-bot :", e);
-        }
-    }
-});
-
-// --- ANALYSE ANTI-LIEN & IP LOGGER ---
-client.on('messageCreate', async (message) => {
-    if (!message.guild || message.author.bot) return;
-    const cfg = getConfig(message.guild.id);
-
-    if (cfg.antilien) {
-        const content = message.content.toLowerCase();
-        const suspiciousPatterns = [
-            'grabify.link', 'ipify.org', 'iplogger.', '2st.to', 'yip.su', 'blasze.com',
-            'discord-gifts.com', 'discord-nitro.gift', 'steam-community.ru', 'nitro-drop.com', 'webhook.site'
-        ];
-
-        if (suspiciousPatterns.some(pattern => content.includes(pattern))) {
-            try {
-                await message.delete();
-                const warning = await message.channel.send(`🚨 **ALERTE SÉCURITÉ CDE** : ${message.author}, ton lien suspect (IP Logger/Malware) a été bloqué !`);
-                setTimeout(() => warning.delete().catch(() => {}), 5000);
-            } catch (e) {}
-        }
-    }
-});
-
-// --- SERVEUR HTTP RENDER ---
-http.createServer((req, res) => {
-    res.end('Bot CDE actif');
-}).listen(process.env.PORT || 10000, '0.0.0.0');
-
-client.login(process.env.DISCORD_TOKEN)
-        
+         
