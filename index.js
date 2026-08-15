@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, RoleSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const fs = require('fs');
-const http = require('http');
+const http = http = require('http');
 
 const client = new Client({ 
     intents: [
@@ -85,15 +85,13 @@ client.on('interactionCreate', async (i) => {
         if (i.commandName === 'ticket-setup') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
 
-            // Les options affichent des émojis normaux
-            const optionsList = (cfg.ticket_options || []).map(opt => `${opt.emoji} **${opt.label}** · ${opt.description}`).join('\n');
+            const optionsList = (cfg.ticket_options || []).map(opt => `> ${opt.emoji} **${opt.label}** · ${opt.description}`).join('\n>\n');
 
-            // Émoji personnalisé sur la ligne du titre "Support — Ouvrir un ticket"
             const embed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
                 .setImage(cfg.ticket_banner)
                 .setTitle('SUPPORT')
-                .setDescription(`### <:cdetiquette:1538244268865364058> Support — Ouvrir un ticket\n${cfg.ticket_desc}\n\n📁 **Choisis le motif de ta demande**\n${optionsList}\n\n📩 Réponse en privé • 🔒 Confidentiel • ⏱️ Prise en charge rapide\nPropulsé par CDE`);
+                .setDescription(`### <:cdetiquette:1538244268865364058> Support — Ouvrir un ticket\n${cfg.ticket_desc}\n\n<:cdedossier:1538244218047307948> **Choisis le motif de ta demande**\n>\n${optionsList}\n\n<:cdemail:1538243884549677157> Réponse en privé • <:cdesecurity:1538244159557865513> Confidentialité • <:cdehorloge:1538244185277186129> Prise en charge rapide\nPropulsé par CDE`);
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_select')
