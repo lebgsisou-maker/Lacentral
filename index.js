@@ -1,6 +1,6 @@
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, StringSelectMenuBuilder, RoleSelectMenuBuilder, PermissionsBitField, ChannelType } = require('discord.js');
 const fs = require('fs');
-const http = http = require('http');
+const http = require('http'); // Corrigé ici
 
 const client = new Client({ 
     intents: [
