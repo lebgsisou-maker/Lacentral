@@ -81,7 +81,7 @@ const commands = [
 
 client.once('ready', async () => {
     console.log(`[BOT CDE] Connecté : ${client.user.tag}`);
-    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
     try {
         await rest.put(Routes.applicationCommands(client.user.id), { body: commands });
         console.log('[COMMANDES] Enregistrées et synchronisées !');
@@ -102,7 +102,6 @@ client.on('guildMemberAdd', async (member) => {
 
     const cfg = getConfig(member.guild.id);
     if (cfg.antiraid_active) {
-        // Mode Sécurité Max : Si le compte a moins de 7 jours, on bloque/bannit direct pour éviter les raids de bots
         const accountAge = Date.now() - member.user.createdTimestamp;
         const sevenDays = 7 * 24 * 60 * 60 * 1000;
         if (accountAge < sevenDays) {
@@ -113,33 +112,30 @@ client.on('guildMemberAdd', async (member) => {
     }
 });
 
-// --- SÉCURITÉ : ANTI-LIENS SUSPECTS (IP Loggers & Serveurs de Raids) ---
+// --- SÉCURITÉ : ANTI-LIENS SUSPECTS ---
 client.on('messageCreate', async (message) => {
     if (!message.guild || message.author.bot) return;
 
     const content = message.content.toLowerCase();
-    
-    // Détection basique d'IP Loggers connus ou liens suspects piégés
     const suspiciousKeywords = ['grabify.link', 'iplogger.', 'discord-gift.', 'steam-nitro.', 'free-nitro.'];
     const isSuspicious = suspiciousKeywords.some(keyword => content.includes(keyword));
 
     if (isSuspicious) {
         try {
             await message.delete();
-            await message.channel.send(`⚠️ ${message.author}, ton message a été supprimé car il contient un lien potentiellement dangereux (IP Logger / Phishing).`);
+            await message.channel.send(`⚠️ ${message.author}, ton message a été supprimé car il contient un lien potentiellement dangereux.`);
         } catch (e) {}
         return;
     }
 });
 
-// --- GESTION DES INTERACTIONS (Commandes & Boutons) ---
+// --- GESTION DES INTERACTIONS ---
 client.on('interactionCreate', async (i) => {
     if (!i.guild) return;
     const cfg = getConfig(i.guild.id);
 
     if (i.isChatInputCommand()) {
         
-        // 1. COMMANDE HELP
         if (i.commandName === 'help') {
             const helpEmbed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
@@ -148,7 +144,6 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ embeds: [helpEmbed], ephemeral: true });
         }
 
-        // 2. COMMANDE CONFIG
         if (i.commandName === 'config') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
 
@@ -164,7 +159,6 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ embeds: [embed], components: [rowRoles], ephemeral: true });
         }
 
-        // 3. COMMANDE TICKET-SETUP (Sans bannière Imgur)
         if (i.commandName === 'ticket-setup') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux admins.', ephemeral: true });
 
@@ -172,8 +166,8 @@ client.on('interactionCreate', async (i) => {
 
             const embed = new EmbedBuilder()
                 .setColor(cfg.embed_color)
-                .setTitle('<:cdesupport:1538273039609765918> SUPPORT')
-                .setDescription(`<:cdesupport:1538273039609765918> **Support — Ouvrir un ticket**\n${cfg.ticket_desc}\n\n<:cdedossier:1538273514295918612> **Choisis le motif de ta demande**\n${optionsList}\n\n<:cdemail:1538272955350519920> Réponse en privé • <:cdeconfidialit:1538272990461042891> Confidentialité • <:cdehorloge:1538273017782861834> Prise en charge rapide\nPropulsé par CDE`);
+                .setTitle('SUPPORT')
+                .setDescription(`**Support — Ouvrir un ticket**\n${cfg.ticket_desc}\n\n**Choisis le motif de ta demande**\n${optionsList}`);
 
             const selectMenu = new StringSelectMenuBuilder()
                 .setCustomId('ticket_select')
@@ -189,7 +183,6 @@ client.on('interactionCreate', async (i) => {
             await i.reply({ content: '✅ Panneau de tickets déployé avec succès !', ephemeral: true });
         }
 
-        // 4. COMMANDE BLACKLIST UTILISATEUR
         if (i.commandName === 'blacklist') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.BanMembers)) return i.reply({ content: '❌ Réservé aux membres autorisés à bannir.', ephemeral: true });
 
@@ -213,7 +206,6 @@ client.on('interactionCreate', async (i) => {
             }
         }
 
-        // 5. COMMANDE ANTI-RAID (SÉCURITÉ MAX)
         if (i.commandName === 'antiraid') {
             if (!i.member.permissions.has(PermissionsBitField.Flags.Administrator)) return i.reply({ content: '❌ Réservé aux administrateurs.', ephemeral: true });
 
@@ -224,15 +216,14 @@ client.on('interactionCreate', async (i) => {
             const alertEmbed = new EmbedBuilder()
                 .setColor(isActive ? '#FF0000' : '#00FF00')
                 .setTitle(isActive ? '🚨 ALERTE : MODE SÉCURITÉ MAX ACTIVÉ' : '🛡️ SÉCURITÉ : Mode normal rétabli')
-                .setDescription(isActive ? 'Le système anti-raid strict est enclenché. Les comptes suspects ou récents seront bloqués automatiquement.' : 'Le serveur a retrouvé un fonctionnement normal.');
+                .setDescription(isActive ? 'Le système anti-raid strict est enclenché.' : 'Le serveur a retrouvé un fonctionnement normal.');
 
             await i.reply({ embeds: [alertEmbed] });
         }
 
-        // 6. COMMANDE PARTNER-BLACKLIST (EXCLUSIVITÉ PROPRIÉTAIRE - TOI SEUL)
         if (i.commandName === 'partner-blacklist') {
             if (i.user.id !== OWNER_ID) {
-                return i.reply({ content: '❌ Accès refusé. Cette commande est strictement réservée au fondateur du CDE.', ephemeral: true });
+                return i.reply({ content: '❌ Accès refusé.', ephemeral: true });
             }
 
             const sub = i.options.getSubcommand();
@@ -252,7 +243,7 @@ client.on('interactionCreate', async (i) => {
                 let responseMsg = `⚠️ Le serveur **${guildId}** a reçu un avertissement. (Strike ${partnerDb[guildId].strikes}/3)`;
 
                 if (partnerDb[guildId].strikes >= 3) {
-                    responseMsg += `\n🚨 **Seuil critique atteint (3 strikes) ! Le serveur est définitivement blacklisté du réseau CDE.**`;
+                    responseMsg += `\n🚨 **Seuil critique atteint ! Le serveur est définitivement blacklisté.**`;
                 }
 
                 saveGlobalData(PARTNER_BLACKLIST_FILE, partnerDb);
@@ -260,13 +251,13 @@ client.on('interactionCreate', async (i) => {
             } 
             else if (sub === 'view') {
                 if (Object.keys(partnerDb).length === 0) {
-                    return i.reply({ content: '📋 Aucun serveur partenaire sanctionné pour le moment.', ephemeral: true });
+                    return i.reply({ content: '📋 Aucun serveur partenaire sanctionné.', ephemeral: true });
                 }
 
                 let listText = Object.entries(partnerDb).map(([gId, data]) => `• **Serveur ID:** ${gId} | **Strikes:** ${data.strikes}/3`).join('\n');
                 const viewEmbed = new EmbedBuilder()
                     .setColor('#FF0000')
-                    .setTitle('🔒 Liste Secrète des Partenaires Sanctionnés')
+                    .setTitle('🔒 Liste des Partenaires Sanctionnés')
                     .setDescription(listText);
 
                 await i.reply({ embeds: [viewEmbed], ephemeral: true });
@@ -274,7 +265,6 @@ client.on('interactionCreate', async (i) => {
         }
     }
 
-    // --- GESTION DES MENUS ET BOUTONS DE TICKETS ---
     if (i.isRoleSelectMenu() && i.customId === 'ticket_roles_select') {
         saveConfig(i.guild.id, { ticket_roles: i.values });
         await i.reply({ content: `✅ Rôles staff mis à jour !`, ephemeral: true });
@@ -305,7 +295,7 @@ client.on('interactionCreate', async (i) => {
         const ticketEmbed = new EmbedBuilder()
             .setColor(cfg.embed_color)
             .setTitle(`⚖️ Ticket CDE : ${ticketType}`)
-            .setDescription(`Bienvenue ${i.user},\nUn membre du staff va te prendre en charge.\n\nExplique ton problème ci-dessous.`)
+            .setDescription(`Bienvenue ${i.user},\nUn membre du staff va te prendre en charge.`)
             .setThumbnail(i.user.displayAvatarURL());
 
         const ticketButtons = new ActionRowBuilder().addComponents(
@@ -345,5 +335,5 @@ client.on('interactionCreate', async (i) => {
 });
 
 http.createServer((req, res) => res.end('Bot CDE actif')).listen(process.env.PORT || 10000, '0.0.0.0');
-client.login(process.env.DISCORD_TOKEN);
-                
+client.login(process.env.TOKEN);
+    
