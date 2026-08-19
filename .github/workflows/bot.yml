@@ -1,7 +1,7 @@
 name: Run Discord Bot
 
 on:
-  push:
+  push: 
     branches: [ "main" ]
   workflow_dispatch:
 
